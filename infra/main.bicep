@@ -14,6 +14,7 @@ param globalAdminEmails string = ''
 var unique = uniqueString(subscription().id, resourceGroup().id)
 var appName = '${namePrefix}-${unique}'
 var storageAccountName = take(toLower(replace('${namePrefix}${unique}', '-', '')), 24)
+var storageConnectionString = 'DefaultEndpointsProtocol=https;AccountName=${storageAccountName};AccountKey=${storageAccount.listKeys().keys[0].value};EndpointSuffix=core.windows.net'
 
 module storage 'modules/storage.bicep' = {
   name: 'storage-${unique}'
@@ -37,6 +38,7 @@ module staticWebApp 'modules/static-web-app.bicep' = {
     name: appName
     location: 'eastus2'
     storageAccountName: storage.outputs.accountName
+    storageConnectionString: storageConnectionString
     globalAdminEmails: globalAdminEmails
     applicationInsightsConnectionString: insights.outputs.connectionString
   }
@@ -45,29 +47,6 @@ module staticWebApp 'modules/static-web-app.bicep' = {
 resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' existing = {
   #disable-next-line BCP334
   name: storageAccountName
-}
-
-var tableDataContributorRole = '0a9a7e1f-b9d0-4cc4-a60d-0319b160aaa3'
-var blobDataContributorRole = 'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
-
-resource tableRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(resourceGroup().id, storageAccountName, appName, tableDataContributorRole)
-  scope: storageAccount
-  properties: {
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', tableDataContributorRole)
-    principalId: staticWebApp.outputs.principalId
-    principalType: 'ServicePrincipal'
-  }
-}
-
-resource blobRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(resourceGroup().id, storageAccountName, appName, blobDataContributorRole)
-  scope: storageAccount
-  properties: {
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', blobDataContributorRole)
-    principalId: staticWebApp.outputs.principalId
-    principalType: 'ServicePrincipal'
-  }
 }
 
 output staticWebAppName string = staticWebApp.outputs.name

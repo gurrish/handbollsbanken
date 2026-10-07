@@ -1,4 +1,3 @@
-import { DefaultAzureCredential } from "@azure/identity";
 import { TableClient, type TableEntity } from "@azure/data-tables";
 import { BlobServiceClient } from "@azure/storage-blob";
 
@@ -19,7 +18,7 @@ function toEntity<T extends { id: string }>(partitionKey: string, item: T, table
     if (key === "id") continue;
     if (key === "diagramJson" && table === "Exercises") {
       entity[key] = "[]";
-    } else if (Array.isArray(value) || (typeof value === "object" && value !== null)) {
+    } else if (Array.isArray(value) || typeof value === "object") {
       entity[`${key}Json`] = JSON.stringify(value);
     } else {
       entity[key] = value as string | number | boolean;
@@ -79,12 +78,10 @@ export class MemoryRepository implements Repository {
 export class TableRepository implements Repository {
   private readonly clients = new Map<string, TableClient>();
   private readonly blobs: BlobServiceClient;
-  constructor(accountName: string) {
-    const endpoint = `https://${accountName}.table.core.windows.net`;
-    const credential = new DefaultAzureCredential();
-    this.blobs = new BlobServiceClient(`https://${accountName}.blob.core.windows.net`, credential);
+  constructor(connectionString: string) {
+    this.blobs = BlobServiceClient.fromConnectionString(connectionString);
     for (const tableName of ["Clubs", "Teams", "Users", "JoinRequests", "Exercises", "TrainingPlans"]) {
-      this.clients.set(tableName, new TableClient(endpoint, tableName, credential));
+      this.clients.set(tableName, TableClient.fromConnectionString(connectionString, tableName));
     }
   }
   private client(table: string): TableClient {
@@ -153,7 +150,7 @@ export function getRepository(): Repository {
   if (repository) return repository;
   const mode = process.env.STORAGE_MODE ?? (process.env.NODE_ENV === "development" ? "memory" : "table");
   if (mode === "memory") repository = new MemoryRepository();
-  else if (mode === "table" && process.env.STORAGE_ACCOUNT_NAME) repository = new TableRepository(process.env.STORAGE_ACCOUNT_NAME);
-  else throw new Error("Configure STORAGE_ACCOUNT_NAME with STORAGE_MODE=table, or use STORAGE_MODE=memory locally.");
+  else if (mode === "table" && process.env.STORAGE_CONNECTION_STRING) repository = new TableRepository(process.env.STORAGE_CONNECTION_STRING);
+  else throw new Error("Configure STORAGE_CONNECTION_STRING with STORAGE_MODE=table, or use STORAGE_MODE=memory locally.");
   return repository;
 }

@@ -13,7 +13,7 @@ The interface supports Swedish and English. Swedish is selected by default; use 
 - Azure Static Web Apps with its integrated Azure Functions API (no separately managed web server).
 - Azure Table Storage for clubs, users, membership requests, teams, exercises and plans. Diagram JSON is stored in a private Azure Blob container.
 - Static Web Apps built-in Microsoft Entra ID authentication. The API derives the signed-in identity from the Static Web Apps principal and enforces club membership and roles.
-- Bicep provisions the Static Web App, Storage Account, Application Insights and storage data-role assignments. The application accesses Storage through `DefaultAzureCredential`; storage keys are disabled.
+- Bicep provisions the Static Web App, Storage Account and Application Insights. The managed Static Web Apps API uses a storage connection string in its server-side app settings because managed APIs don't support managed identity. Shared-key access is enabled on the storage account; never expose or commit the key.
 
 No SQL database, Cosmos DB, Kubernetes, Redis, Service Bus or App Service is used. Infrastructure provisions Static Web Apps Standard to support the configured identity and API setup; Storage and Application Insights are usage-based.
 
@@ -92,7 +92,7 @@ location.reload();
 
 Submit a request, then switch back to the seeded ClubAdmin with `localStorage.removeItem("handboll-dev-email"); location.reload();` to approve it. The mock identity header is accepted only by a local Functions process with `DEV_AUTH=true`; it is ignored in production.
 
-To test against an Azure Storage account locally, set `STORAGE_MODE=table` and `STORAGE_ACCOUNT_NAME` in `api/local.settings.json`, then sign in to Azure CLI (`az login`) with an identity granted **Storage Table Data Contributor** and **Storage Blob Data Contributor**. Never put storage account keys in source control. The seeded local demo account has GlobalAdmin and ClubAdmin access; for another mock email, add it to `GLOBAL_ADMIN_EMAILS` before its first sign-in.
+To test against an Azure Storage account locally, set `STORAGE_MODE=table` and `STORAGE_CONNECTION_STRING` in `api/local.settings.json`. Keep the connection string out of source control and use a local-only settings file. The seeded local demo account has GlobalAdmin and ClubAdmin access; for another mock email, add it to `GLOBAL_ADMIN_EMAILS` before its first sign-in.
 
 Build checks:
 
@@ -107,7 +107,7 @@ npm run build
 ### 1. Configure Azure and GitHub
 
 - Create an Azure resource group.
-- Create an app registration/service principal for the infrastructure workflow. Grant it Contributor and User Access Administrator (or Owner) on that resource group so it can deploy resources and create the Storage data-role assignments.
+- Create an app registration/service principal for the infrastructure workflow. Grant it Contributor on that resource group so it can deploy resources.
 - Configure a federated credential on that app registration for GitHub Actions: issuer `https://token.actions.githubusercontent.com`, audience `api://AzureADTokenExchange`, and subject `repo:gurrish/handbollsbanken:ref:refs/heads/main`. If you use a different repository or deploy from a GitHub environment, set the subject to match that repository or environment exactly.
 - Azure authentication uses GitHub's OIDC federation; **do not create or store an Entra service-principal client secret**. `AZURE_CLIENT_ID`, `AZURE_TENANT_ID` and `AZURE_SUBSCRIPTION_ID` are identifiers, not passwords. The workflow below reads them from GitHub secrets, but you can store them as repository variables instead if you update its `azure/login` inputs from `secrets.*` to `vars.*`.
 - Add these GitHub repository secrets:
@@ -122,7 +122,7 @@ npm run build
 
 ### 2. Deploy infrastructure
 
-Push an `infra/**` change to `main`, or run **Deploy infrastructure** from the Actions tab. The workflow deploys the Static Web App, storage account, Application Insights and table/blob data roles. The first deployment can also be started locally:
+Push an `infra/**` change to `main`, or run **Deploy infrastructure** from the Actions tab. The workflow deploys the Static Web App, storage account and Application Insights, then stores the generated storage connection string in the managed API's app settings. The connection string is a server-side secret; anyone with permission to manage the Azure resources or deploy API code can access it. The first deployment can also be started locally:
 
 ```powershell
 az login
@@ -153,7 +153,7 @@ Microsoft Entra ID uses Static Web Apps' preconfigured `aad` provider; the confi
 - `Coach`: create and update exercises and training plans.
 - `Viewer`: view approved club data and diagrams.
 - Every team, join request, exercise and training plan is partitioned by `ClubId`; plans also reference a `TeamId`. API queries use the authenticated user's approved club, not a caller-supplied tenant identifier.
-- `/api/*` is protected by Static Web Apps `authenticated` routing. Functions independently parse the trusted `x-ms-client-principal` header and check membership and role requirements.
+- `/api/*` is protected by Static Web Apps `authenticated` routing. The managed Functions API uses its server-side Storage connection string for Table and Blob access; Functions independently parse the trusted `x-ms-client-principal` header and check membership and role requirements.
 - HTTP endpoints: `GET /api/bootstrap`; `POST /api/clubs` and `PUT /api/clubs/{id}`; `POST /api/join-requests`; `PATCH /api/join-requests/{id}`; `POST /api/teams`; exercise and plan collection `GET`/`POST` and item `PUT`/`DELETE`; `PATCH /api/users/{id}/role`.
 - Scalar domain fields are stored as native Table properties, while list fields use JSON-encoded string properties. Diagram JSON is written to a private `diagrams` blob container and returned as part of the exercise DTO.
 
