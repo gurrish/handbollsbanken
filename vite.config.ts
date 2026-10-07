@@ -11,6 +11,9 @@ export default defineConfig({
     VitePWA({
       registerType: "autoUpdate",
       includeAssets: ["favicon.svg"],
+      workbox: {
+        navigateFallbackDenylist: [/^\/\.auth\//],
+      },
       manifest: {
         name: "Handbollsbanken",
         short_name: "Handboll",
