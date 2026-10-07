@@ -1,0 +1,13 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "node",
+    "STORAGE_MODE": "memory",
+    "DEV_AUTH": "true",
+    "DEV_AUTH_EMAIL": "coach@local.test",
+    "DEV_AUTH_NAME": "Demo Coach",
+    "DEV_SEED_DEMO_DATA": "true",
+    "GLOBAL_ADMIN_EMAILS": "coach@local.test"
+  }
+}
