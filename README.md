@@ -4,13 +4,15 @@ A mobile-first handball practice planner for a small number of clubs. Coaches ca
 
 The planner turns the total session duration and exercise order into an elapsed-time timeline, splitting time evenly across the selected drills.
 
+The interface supports Swedish and English. Swedish is selected by default; use the language selector in the app to switch languages. Your choice is saved on the device.
+
 ## Stack
 
 - React, TypeScript and Vite; Tailwind CSS utilities, shadcn-style reusable UI primitives, and React-Konva.
 - Progressive Web App support with an installable manifest and automatic service-worker updates.
 - Azure Static Web Apps with its integrated Azure Functions API (no separately managed web server).
 - Azure Table Storage for clubs, users, membership requests, teams, exercises and plans. Diagram JSON is stored in a private Azure Blob container.
-- Static Web Apps authentication for Microsoft and optional Google login. The API derives the signed-in identity from the Static Web Apps principal and enforces club membership and roles.
+- Static Web Apps built-in Microsoft Entra ID authentication. The API derives the signed-in identity from the Static Web Apps principal and enforces club membership and roles.
 - Bicep provisions the Static Web App, Storage Account, Application Insights and storage data-role assignments. The application accesses Storage through `DefaultAzureCredential`; storage keys are disabled.
 
 No SQL database, Cosmos DB, Kubernetes, Redis, Service Bus or App Service is used. Infrastructure provisions Static Web Apps Standard to support the configured identity and API setup; Storage and Application Insights are usage-based.
@@ -79,7 +81,7 @@ Prerequisites: Node.js 20+, npm, Azure Functions Core Tools v4, and Azurite. The
    npm run dev
    ```
 
-   Open the URL printed by Vite. Its `/api` proxy forwards requests to Functions on port 7071. Local development uses a mock coach identity (`DEV_AUTH=true`) and volatile in-memory application data; signing in with Microsoft or Google is not part of the local flow. The example settings seed a small demo club so the library and planner work immediately. Data is lost when the local Functions process restarts.
+   Open the URL printed by Vite. Its `/api` proxy forwards requests to Functions on port 7071. Local development uses a mock coach identity (`DEV_AUTH=true`) and volatile in-memory application data; signing in with Microsoft is not part of the local flow. The example settings seed a small demo club so the library and planner work immediately. Data is lost when the local Functions process restarts.
 
 To try the join-request flow, use another mock email in the browser console and reload:
 
@@ -113,8 +115,6 @@ npm run build
   - `AZURE_TENANT_ID`
   - `AZURE_SUBSCRIPTION_ID`
   - `SWA_DEPLOYMENT_TOKEN` (set after the first infrastructure deployment)
-  - `GOOGLE_CLIENT_SECRET` (needed only if Google login is enabled)
-- Add `GOOGLE_CLIENT_ID` as a repository variable (needed only if Google login is enabled; it is an OAuth identifier, not a secret).
 - Add these repository variables:
   - `AZURE_RESOURCE_GROUP`
   - `NAME_PREFIX` (optional; defaults to `handbollsbanken`)
@@ -144,7 +144,7 @@ Save that value as the GitHub `SWA_DEPLOYMENT_TOKEN` secret. The app's first rel
 
 Sign in with an email listed in `GLOBAL_ADMIN_EMAILS`. GlobalAdmins can create clubs and review membership requests. A user signs in, chooses a club and submits a request; a ClubAdmin or GlobalAdmin approves or rejects it. Approved users start as Coaches. A GlobalAdmin or ClubAdmin can then set an approved member's role to ClubAdmin, Coach or Viewer.
 
-Microsoft sign-in is built in. To enable Google, create a Google OAuth web client, set its authorized redirect URI to `https://<static-web-app-host>/.auth/login/google/callback`, add its client ID and secret as the GitHub secrets above, then redeploy the infrastructure workflow. The optional Facebook provider is not configured.
+Microsoft Entra ID uses Static Web Apps' preconfigured `aad` provider; the configuration deliberately does not override it with a custom identity-provider registration. The MVP does not currently enable Google or Facebook. Adding another custom identity provider requires configuring a complete custom Microsoft Entra registration too, because Static Web Apps custom provider registrations replace the preconfigured providers.
 
 ## Access model and API
 

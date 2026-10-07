@@ -4,6 +4,7 @@ import type Konva from "konva";
 import { ArrowDownLeft, ArrowRight, CircleDot, Goal, Hand, MoveRight, Plus, RotateCcw, Save, Trash2, Type } from "lucide-react";
 import { Button } from "./ui";
 import type { DiagramItem } from "../types";
+import { localize } from "../lib/i18n";
 
 const tools = [
   { type: "player", label: "Player", icon: Hand },
@@ -63,7 +64,7 @@ export default function DiagramEditor({ value, onSave }: { value: string; onSave
     window.setTimeout(() => setSaved(false), 1800);
   };
 
-  return (
+  return localize((
     <div className="diagram-editor">
       <div className="diagram-toolbar">
         <div className="tool-list">{tools.map(({ type, label, icon: Icon }) =>
@@ -120,5 +121,5 @@ export default function DiagramEditor({ value, onSave }: { value: string; onSave
       </div>
       <div className="canvas-caption"><span><Plus size={13} /> Add a marker from the toolbar</span><span>Drag to move · Select and resize · Delete key to remove</span></div>
     </div>
-  );
+  ));
 }

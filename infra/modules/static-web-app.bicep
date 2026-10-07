@@ -3,10 +3,6 @@ param location string
 param storageAccountName string
 param globalAdminEmails string
 param applicationInsightsConnectionString string
-@secure()
-param googleClientId string = ''
-@secure()
-param googleClientSecret string = ''
 
 resource staticWebApp 'Microsoft.Web/staticSites@2022-09-01' = {
   name: name
@@ -20,16 +16,6 @@ resource staticWebApp 'Microsoft.Web/staticSites@2022-09-01' = {
   }
   properties: {
     stagingEnvironmentPolicy: 'Enabled'
-  }
-}
-
-resource authSettings 'Microsoft.Web/staticSites/config@2022-09-01' = {
-  parent: staticWebApp
-  name: 'appsettings'
-  kind: 'appsettings'
-  properties: {
-    GOOGLE_CLIENT_ID: googleClientId
-    GOOGLE_CLIENT_SECRET: googleClientSecret
   }
 }
 

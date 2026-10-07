@@ -14,7 +14,7 @@ export default defineConfig({
       manifest: {
         name: "Handbollsbanken",
         short_name: "Handboll",
-        description: "Plan better handball practices, together.",
+        description: "Planera bättre handbollsträningar tillsammans.",
         theme_color: "#f7f8fc",
         background_color: "#f7f8fc",
         display: "standalone",

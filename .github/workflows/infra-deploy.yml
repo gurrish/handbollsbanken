@@ -33,7 +33,5 @@ jobs:
             --template-file infra/main.bicep \
             --parameters namePrefix="${{ vars.NAME_PREFIX || 'handbollsbanken' }}" \
               globalAdminEmails="${{ vars.GLOBAL_ADMIN_EMAILS || '' }}" \
-              googleClientId="${{ secrets.GOOGLE_CLIENT_ID || '' }}" \
-              googleClientSecret="${{ secrets.GOOGLE_CLIENT_SECRET || '' }}" \
             --query "properties.outputs.{webApp:staticWebAppUrl.value,storage:storageAccountName.value}" \
             --output table

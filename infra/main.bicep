@@ -11,14 +11,6 @@ param location string = resourceGroup().location
 @description('Email addresses allowed to bootstrap as GlobalAdmin, comma-separated.')
 param globalAdminEmails string = ''
 
-@secure()
-@description('Optional Google OAuth client ID for Static Web Apps sign-in.')
-param googleClientId string = ''
-
-@secure()
-@description('Optional Google OAuth client secret for Static Web Apps sign-in.')
-param googleClientSecret string = ''
-
 var unique = uniqueString(subscription().id, resourceGroup().id)
 var appName = '${namePrefix}-${unique}'
 var storageAccountName = take(toLower(replace('${namePrefix}${unique}', '-', '')), 24)
@@ -47,8 +39,6 @@ module staticWebApp 'modules/static-web-app.bicep' = {
     storageAccountName: storage.outputs.accountName
     globalAdminEmails: globalAdminEmails
     applicationInsightsConnectionString: insights.outputs.connectionString
-    googleClientId: googleClientId
-    googleClientSecret: googleClientSecret
   }
 }
 
