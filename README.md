@@ -2,7 +2,7 @@
 
 A mobile-first handball practice planner for a small number of clubs. Coaches can curate a shared exercise library, build ordered training plans and draw reusable court diagrams. Each club's teams, members, exercises and plans are isolated from other clubs.
 
-The planner turns the total session duration and exercise order into an elapsed-time timeline, splitting time evenly across the selected drills.
+The planner lets coaches select exercises from a dropdown, set each exercise's duration, reorder the session and review the resulting elapsed-time timeline. The total session duration is calculated from the selected exercise durations. Members can choose which club teams they follow to filter the training planner, and club admins can edit team names and age groups.
 
 The interface supports Swedish and English. Swedish is selected by default; use the language selector in the app to switch languages. Your choice is saved on the device.
 
@@ -154,6 +154,8 @@ Microsoft Entra ID uses Static Web Apps' preconfigured `aad` provider; the confi
 - `Viewer`: view approved club data and diagrams.
 - Every team, join request, exercise and training plan is partitioned by `ClubId`; plans also reference a `TeamId`. API queries use the authenticated user's approved club, not a caller-supplied tenant identifier.
 - `/api/*` is protected by Static Web Apps `authenticated` routing. The managed Functions API uses its server-side Storage connection string for Table and Blob access; Functions independently parse the trusted `x-ms-client-principal` header and check membership and role requirements.
+- Training sessions can be shared using a link with a `training` query parameter. The app returns to that training after sign-in; its data is still loaded only from the signed-in member's approved club, so links do not make sessions public.
+- The diagram editor includes a marked handball court with fixed goals and supports rotating saved objects.
 - HTTP endpoints: `GET /api/bootstrap`; `POST /api/clubs` and `PUT /api/clubs/{id}`; `POST /api/join-requests`; `PATCH /api/join-requests/{id}`; `POST /api/teams`; exercise and plan collection `GET`/`POST` and item `PUT`/`DELETE`; `PATCH /api/users/{id}/role`.
 - Scalar domain fields are stored as native Table properties, while list fields use JSON-encoded string properties. Diagram JSON is written to a private `diagrams` blob container and returned as part of the exercise DTO.
 

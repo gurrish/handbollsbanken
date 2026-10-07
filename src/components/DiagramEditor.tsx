@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from "react";
-import { Arrow, Circle, Ellipse, Group, Layer, Line, Rect, Stage, Text, Transformer } from "react-konva";
+import { Fragment, useEffect, useRef, useState } from "react";
+import { Arrow, Circle, Ellipse, Group, Layer, Line, Rect, Shape, Stage, Text, Transformer } from "react-konva";
 import type Konva from "konva";
-import { ArrowDownLeft, ArrowRight, CircleDot, Goal, Hand, MoveRight, Plus, RotateCcw, Save, Trash2, Type } from "lucide-react";
+import { ArrowDownLeft, ArrowRight, CircleDot, Goal, Hand, MoveRight, Plus, RotateCcw, RotateCw, Save, Trash2, Type } from "lucide-react";
 import { Button } from "./ui";
 import type { DiagramItem } from "../types";
 import { localize } from "../lib/i18n";
@@ -35,6 +35,7 @@ export default function DiagramEditor({ value, onSave }: { value: string; onSave
   const stageRef = useRef<Konva.Stage>(null);
   const transformerRef = useRef<Konva.Transformer>(null);
   const nodes = useRef(new Map<string, Konva.Node>());
+  const selectedItem = items.find((item) => item.id === selectedId);
 
   useEffect(() => {
     const selected = selectedId ? nodes.current.get(selectedId) : undefined;
@@ -72,6 +73,7 @@ export default function DiagramEditor({ value, onSave }: { value: string; onSave
         )}</div>
         <div className="diagram-actions">
           <Button variant="ghost" onClick={() => { setItems([]); setSelectedId(null); }}><RotateCcw size={15} /> Clear</Button>
+          {selectedId && <Button variant="ghost" onClick={() => updateItem(selectedId, { rotation: ((selectedItem?.rotation || 0) + 15) % 360 })}><RotateCw size={15} /> Rotate 15°</Button>}
           {selectedId && <Button variant="ghost" onClick={() => { setItems((current) => current.filter((item) => item.id !== selectedId)); setSelectedId(null); }}><Trash2 size={15} /> Delete</Button>}
           <Button onClick={() => void save()}><Save size={15} /> {saved ? "Saved!" : "Save diagram"}</Button>
         </div>
@@ -84,19 +86,51 @@ export default function DiagramEditor({ value, onSave }: { value: string; onSave
           onMouseDown={(event) => { if (event.target === event.target.getStage()) setSelectedId(null); }}
           className="court-canvas"
         >
-          <Layer>
+          <Layer listening={false}>
             <Rect x={4} y={4} width={612} height={352} fill="#fff" stroke="#dfe5ee" strokeWidth={2} cornerRadius={8} />
-            <Line points={[310, 5, 310, 355]} stroke="#e5eaf1" strokeWidth={2} />
-            <Circle x={310} y={180} radius={55} stroke="#e5eaf1" strokeWidth={2} />
-            <Line points={[5, 180, 615, 180]} stroke="#eff2f6" strokeWidth={1} dash={[5, 5]} />
+            <Line points={[34, 10, 586, 10, 586, 158]} stroke="#dce3ec" strokeWidth={2} />
+            <Line points={[586, 202, 586, 350, 34, 350, 34, 202]} stroke="#dce3ec" strokeWidth={2} />
+            <Line points={[34, 158, 34, 10]} stroke="#dce3ec" strokeWidth={2} />
+            <Line points={[310, 10, 310, 350]} stroke="#dce3ec" strokeWidth={2} />
+            <Circle x={310} y={180} radius={55} stroke="#dce3ec" strokeWidth={2} />
+            {[{ x: 34, direction: 1 }, { x: 586, direction: -1 }].map(({ x, direction }) => (
+              <Fragment key={x}>
+                <Shape
+                  sceneFunc={(context, shape) => {
+                    context.beginPath();
+                    context.arc(0, 0, 88, direction === 1 ? -Math.PI / 2 : Math.PI / 2, direction === 1 ? Math.PI / 2 : Math.PI * 1.5);
+                    context.strokeShape(shape);
+                  }}
+                  x={x} y={180} stroke="#9cadc0" strokeWidth={2}
+                />
+                <Shape
+                  sceneFunc={(context, shape) => {
+                    context.beginPath();
+                    context.arc(0, 0, 132, direction === 1 ? -Math.PI / 2 : Math.PI / 2, direction === 1 ? Math.PI / 2 : Math.PI * 1.5);
+                    context.strokeShape(shape);
+                  }}
+                  x={x} y={180} stroke="#b8c4d2" strokeWidth={1.5} dash={[7, 6]}
+                />
+                <Line points={[x + direction * 103, 171, x + direction * 103, 189]} stroke="#9cadc0" strokeWidth={2} />
+                <Line points={[x + direction * 59, 173, x + direction * 59, 187]} stroke="#c1ccd8" strokeWidth={1.5} />
+                <Rect x={direction === 1 ? 8 : 586} y={158} width={26} height={44} fill="#f7f9fc" stroke="#8b9bb0" strokeWidth={2} />
+                <Line points={[direction === 1 ? 34 : 586, 158, direction === 1 ? 34 : 586, 202]} stroke="#65778e" strokeWidth={3} />
+                <Line points={[direction === 1 ? 8 : 612, 158, direction === 1 ? 8 : 612, 202]} stroke="#b7c3d0" strokeWidth={1} />
+                <Line points={[direction === 1 ? 8 : 586, 158, direction === 1 ? 34 : 612, 158]} stroke="#b7c3d0" strokeWidth={1} />
+                <Line points={[direction === 1 ? 8 : 586, 202, direction === 1 ? 34 : 612, 202]} stroke="#b7c3d0" strokeWidth={1} />
+              </Fragment>
+            ))}
+          </Layer>
+          <Layer>
             {items.map((item) => {
               const common = {
                 key: item.id, x: item.x, y: item.y, draggable: true,
+                rotation: item.rotation || 0,
                 onClick: () => setSelectedId(item.id), onTap: () => setSelectedId(item.id),
                 onDragEnd: (event: Konva.KonvaEventObject<DragEvent>) => updateItem(item.id, { x: event.target.x(), y: event.target.y() }),
                 onTransformEnd: (event: Konva.KonvaEventObject<Event>) => {
                   const node = event.target;
-                  updateItem(item.id, { x: node.x(), y: node.y(), width: Math.max(20, item.width * node.scaleX()), height: Math.max(20, item.height * node.scaleY()) });
+                  updateItem(item.id, { x: node.x(), y: node.y(), width: Math.max(20, item.width * node.scaleX()), height: Math.max(20, item.height * node.scaleY()), rotation: node.rotation() });
                   node.scaleX(1); node.scaleY(1);
                 },
                 ref: (node: Konva.Node | null) => { if (node) nodes.current.set(item.id, node); else nodes.current.delete(item.id); },
@@ -115,11 +149,11 @@ export default function DiagramEditor({ value, onSave }: { value: string; onSave
               if (item.type === "ball") return <Ellipse {...common} radiusX={item.width / 2} radiusY={item.height / 2} fill={colors.ball} stroke="#fff" strokeWidth={2} />;
               return <Text {...common} text={item.text || "Text"} width={item.width} height={item.height} wrap="word" fontSize={16} fontStyle="bold" fill={colors.text} />;
             })}
-            <Transformer ref={transformerRef} rotateEnabled={false} enabledAnchors={["top-left", "top-right", "bottom-left", "bottom-right"]} boundBoxFunc={(oldBox, newBox) => newBox.width < 20 || newBox.height < 20 ? oldBox : newBox} />
+            <Transformer ref={transformerRef} rotateEnabled enabledAnchors={["top-left", "top-right", "bottom-left", "bottom-right"]} boundBoxFunc={(oldBox, newBox) => newBox.width < 20 || newBox.height < 20 ? oldBox : newBox} />
           </Layer>
         </Stage>
       </div>
-      <div className="canvas-caption"><span><Plus size={13} /> Add a marker from the toolbar</span><span>Drag to move · Select and resize · Delete key to remove</span></div>
+      <div className="canvas-caption"><span><Plus size={13} /> Court markings and goals stay fixed</span><span>Drag to move · Select to resize or rotate · Delete key to remove</span></div>
     </div>
   ));
 }

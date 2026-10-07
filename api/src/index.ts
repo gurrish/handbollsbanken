@@ -1,6 +1,6 @@
 import { app, type HttpRequest, type InvocationContext } from "@azure/functions";
 import { createHash, randomUUID } from "node:crypto";
-import { clubInput, decisionInput, exerciseInput, joinRequestInput, planInput, roleInput, teamInput, type Club, type Exercise, type JoinRequest, type Role, type TrainingPlan, type User } from "./domain.js";
+import { clubInput, decisionInput, displayNameInput, exerciseInput, interestedTeamsInput, joinRequestInput, planInput, roleInput, teamInput, type Club, type Exercise, type JoinRequest, type Role, type Team, type TrainingPlan, type User } from "./domain.js";
 import { getRepository, type Repository } from "./repository.js";
 
 interface Identity {
@@ -55,8 +55,8 @@ async function getCurrentUser(repo: Repository, actor: Identity): Promise<User> 
       roles: globalAdmins.includes(actor.email) ? ["GlobalAdmin"] : ["Viewer"], status: "pending",
     };
     await repo.upsert("Users", "users", user);
-  } else if (user.name !== actor.name || user.email !== actor.email) {
-    user = { ...user, name: actor.name, email: actor.email };
+  } else if (user.email !== actor.email) {
+    user = { ...user, email: actor.email };
     await repo.upsert("Users", "users", user);
   }
   return user;
@@ -162,6 +162,28 @@ export async function handle(request: HttpRequest, context: InvocationContext): 
         users: hasRole(user, "GlobalAdmin") ? users : users.filter((item) => item.clubId === user.clubId),
       });
     }
+    if (resource === "users" && id === "me" && action === "profile" && method === "PATCH") {
+      const input = await body(request, displayNameInput);
+      const updated = { ...user, name: input.name };
+      await repo.upsert("Users", "users", updated);
+      if (updated.clubId) {
+        const requests = await repo.list<JoinRequest>("JoinRequests", updated.clubId);
+        await Promise.all(requests.filter((item) => item.userId === updated.id && item.userName !== updated.name)
+          .map((item) => repo.upsert("JoinRequests", item.clubId, { ...item, userName: updated.name })));
+      }
+      return json(updated);
+    }
+    if (resource === "users" && id === "me" && action === "teams" && method === "PATCH") {
+      const input = await body(request, interestedTeamsInput);
+      const clubId = requireClub(user);
+      const teams = await repo.list<Team>("Teams", clubId);
+      if (input.teamIds.some((teamId) => !teams.some((team) => team.id === teamId))) {
+        throw new HttpError(400, "Choose teams from your club.");
+      }
+      const updated = { ...user, interestedTeamIds: input.teamIds };
+      await repo.upsert("Users", "users", updated);
+      return json(updated);
+    }
     if (resource === "join-requests" && method === "POST") {
       const data = await body(request, joinRequestInput);
       if (user.status === "approved") throw new HttpError(409, "You already belong to a club.");
@@ -224,6 +246,15 @@ export async function handle(request: HttpRequest, context: InvocationContext): 
       const team = { id: randomUUID(), clubId: requireClub(user), ...data };
       await repo.upsert("Teams", team.clubId, team);
       return json(team, 201);
+    }
+    if (resource === "teams" && id && method === "PUT") {
+      requireRole(user, "ClubAdmin");
+      const clubId = requireClub(user);
+      const current = await repo.get<Team>("Teams", clubId, id);
+      if (!current) throw new HttpError(404, "Team not found.");
+      const updated = { ...current, ...await body(request, teamInput) };
+      await repo.upsert("Teams", clubId, updated);
+      return json(updated);
     }
     if (resource === "exercises" && method === "GET") {
       const clubId = requireClub(user);

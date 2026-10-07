@@ -11,6 +11,7 @@ const diagramItems = z.array(z.object({
   y: z.number().finite().min(-1000).max(10000),
   width: z.number().finite().positive().max(10000),
   height: z.number().finite().positive().max(10000),
+  rotation: z.number().finite().min(-3600).max(3600).optional(),
   text: z.string().max(200).optional(),
 }).strict()).max(200);
 
@@ -32,6 +33,7 @@ export interface User {
   clubId: string | null;
   roles: Role[];
   status: Status;
+  interestedTeamIds?: string[];
 }
 export interface JoinRequest {
   id: string;
@@ -62,6 +64,7 @@ export interface TrainingPlan {
   date: string;
   duration: number;
   exerciseIds: string[];
+  exerciseDurations?: Record<string, number>;
   notes: string;
 }
 
@@ -89,7 +92,19 @@ export const planInput = z.object({
   }, "Date must be a valid calendar date."),
   duration: z.number().int().min(15).max(300),
   exerciseIds: z.array(z.string()).max(50).refine((ids) => new Set(ids).size === ids.length, "Exercises cannot be duplicated.").default([]),
+  exerciseDurations: z.record(z.string().min(1), z.number().int().min(1).max(300)).optional(),
   notes: z.string().trim().max(2000).default(""),
+}).superRefine((plan, context) => {
+  if (!plan.exerciseDurations) return;
+  const durationIds = Object.keys(plan.exerciseDurations);
+  if (durationIds.length !== plan.exerciseIds.length || plan.exerciseIds.some((id) => plan.exerciseDurations?.[id] === undefined)) {
+    context.addIssue({ code: "custom", path: ["exerciseDurations"], message: "Set a duration for every selected exercise." });
+    return;
+  }
+  const exerciseTotal = Object.values(plan.exerciseDurations).reduce((total, minutes) => total + minutes, 0);
+  if (plan.exerciseIds.length && exerciseTotal !== plan.duration) {
+    context.addIssue({ code: "custom", path: ["duration"], message: "Session duration must equal the total exercise duration." });
+  }
 });
 export const teamInput = z.object({
   name: z.string().trim().min(2).max(80),
@@ -99,3 +114,7 @@ export const joinRequestInput = z.object({ clubId: z.string().min(1) });
 export const decisionInput = z.object({ status: z.enum(["approved", "rejected"]) });
 export const clubInput = z.object({ name: z.string().trim().min(2).max(100) });
 export const roleInput = z.object({ role: z.enum(["ClubAdmin", "Coach", "Viewer"]) });
+export const displayNameInput = z.object({ name: z.string().trim().min(2).max(80) });
+export const interestedTeamsInput = z.object({
+  teamIds: z.array(z.string().min(1).max(100)).max(100).refine((ids) => new Set(ids).size === ids.length, "Teams cannot be duplicated."),
+});
