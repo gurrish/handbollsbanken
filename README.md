@@ -106,13 +106,15 @@ npm run build
 
 - Create an Azure resource group.
 - Create an app registration/service principal for the infrastructure workflow. Grant it Contributor and User Access Administrator (or Owner) on that resource group so it can deploy resources and create the Storage data-role assignments.
-- Configure a federated GitHub Actions credential for the repository's `main` branch.
+- Configure a federated credential on that app registration for GitHub Actions: issuer `https://token.actions.githubusercontent.com`, audience `api://AzureADTokenExchange`, and subject `repo:gurrish/handbollsbanken:ref:refs/heads/main`. If you use a different repository or deploy from a GitHub environment, set the subject to match that repository or environment exactly.
+- Azure authentication uses GitHub's OIDC federation; **do not create or store an Entra service-principal client secret**. `AZURE_CLIENT_ID`, `AZURE_TENANT_ID` and `AZURE_SUBSCRIPTION_ID` are identifiers, not passwords. The workflow below reads them from GitHub secrets, but you can store them as repository variables instead if you update its `azure/login` inputs from `secrets.*` to `vars.*`.
 - Add these GitHub repository secrets:
   - `AZURE_CLIENT_ID`
   - `AZURE_TENANT_ID`
   - `AZURE_SUBSCRIPTION_ID`
   - `SWA_DEPLOYMENT_TOKEN` (set after the first infrastructure deployment)
-  - `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` (needed to enable Google login)
+  - `GOOGLE_CLIENT_SECRET` (needed only if Google login is enabled)
+- Add `GOOGLE_CLIENT_ID` as a repository variable (needed only if Google login is enabled; it is an OAuth identifier, not a secret).
 - Add these repository variables:
   - `AZURE_RESOURCE_GROUP`
   - `NAME_PREFIX` (optional; defaults to `handbollsbanken`)
