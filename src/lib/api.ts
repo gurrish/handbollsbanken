@@ -1,4 +1,4 @@
-import type { Bootstrap, Exercise, TrainingPlan } from "../types";
+import type { Bootstrap, Exercise, TrainingPlan, TrainingTemplate } from "../types";
 
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const devEmail = import.meta.env.DEV ? window.localStorage.getItem("handboll-dev-email") : null;
@@ -21,3 +21,5 @@ export const saveExercise = (exercise: Partial<Exercise> & Pick<Exercise, "title
   });
 export const savePlan = (plan: Omit<TrainingPlan, "id" | "clubId">, id?: string) =>
   api<TrainingPlan>(id ? `plans/${id}` : "plans", { method: id ? "PUT" : "POST", body: JSON.stringify(plan) });
+export const saveTemplate = (template: Omit<TrainingTemplate, "id" | "clubId">, id?: string) =>
+  api<TrainingTemplate>(id ? `templates/${id}` : "templates", { method: id ? "PUT" : "POST", body: JSON.stringify(template) });

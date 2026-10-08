@@ -2,7 +2,7 @@
 
 A mobile-first handball practice planner for a small number of clubs. Coaches can curate a shared exercise library, build ordered training plans and draw reusable court diagrams. Each club's teams, members, exercises and plans are isolated from other clubs.
 
-The planner lets coaches select exercises from a dropdown, set each exercise's duration, reorder the session and review the resulting elapsed-time timeline. The total session duration is calculated from the selected exercise durations. Members can choose which club teams they follow to filter the training planner, and club admins can edit team names and age groups.
+The planner lets coaches select searchable library exercises or add free-text exercises, set each exercise's duration, reorder a session and review the resulting elapsed-time timeline. Sessions open in a detail and sharing view where coaches can edit them in place. Coaches can also save reusable training templates and schedule copies for different teams and dates; changing a scheduled copy does not change its template. Members can choose which club teams they follow to filter the training planner, and club admins can edit team names and age groups.
 
 The interface supports Swedish and English. Swedish is selected by default; use the language selector in the app to switch languages. Your choice is saved on the device.
 
@@ -11,7 +11,7 @@ The interface supports Swedish and English. Swedish is selected by default; use 
 - React, TypeScript and Vite; Tailwind CSS utilities, shadcn-style reusable UI primitives, and React-Konva.
 - Progressive Web App support with an installable manifest and automatic service-worker updates.
 - Azure Static Web Apps with its integrated Azure Functions API (no separately managed web server).
-- Azure Table Storage for clubs, users, membership requests, teams, exercises and plans. Diagram JSON is stored in a private Azure Blob container.
+- Azure Table Storage for clubs, users, membership requests, teams, exercises, scheduled plans and reusable training templates. Diagram JSON is stored in a private Azure Blob container.
 - Static Web Apps built-in Microsoft Entra ID authentication. The API derives the signed-in identity from the Static Web Apps principal and enforces club membership and roles.
 - Bicep provisions the Static Web App, Storage Account and Application Insights. The managed Static Web Apps API uses a storage connection string in its server-side app settings because managed APIs don't support managed identity. Shared-key access is enabled on the storage account; never expose or commit the key.
 
@@ -152,11 +152,11 @@ Microsoft Entra ID uses Static Web Apps' preconfigured `aad` provider; the confi
 - `ClubAdmin`: review requests for their club, create teams and manage club member roles.
 - `Coach`: create and update exercises and training plans.
 - `Viewer`: view approved club data and diagrams.
-- Every team, join request, exercise and training plan is partitioned by `ClubId`; plans also reference a `TeamId`. API queries use the authenticated user's approved club, not a caller-supplied tenant identifier.
+- Every team, join request, exercise, scheduled plan and training template is partitioned by `ClubId`; scheduled plans also reference a `TeamId`. API queries use the authenticated user's approved club, not a caller-supplied tenant identifier.
 - `/api/*` is protected by Static Web Apps `authenticated` routing. The managed Functions API uses its server-side Storage connection string for Table and Blob access; Functions independently parse the trusted `x-ms-client-principal` header and check membership and role requirements.
 - Training sessions can be shared using a link with a `training` query parameter. The app returns to that training after sign-in; its data is still loaded only from the signed-in member's approved club, so links do not make sessions public.
 - The diagram editor includes a marked handball court with fixed goals and supports rotating saved objects.
-- HTTP endpoints: `GET /api/bootstrap`; `POST /api/clubs` and `PUT /api/clubs/{id}`; `POST /api/join-requests`; `PATCH /api/join-requests/{id}`; `POST /api/teams`; exercise and plan collection `GET`/`POST` and item `PUT`/`DELETE`; `PATCH /api/users/{id}/role`.
+- HTTP endpoints: `GET /api/bootstrap`; `POST /api/clubs` and `PUT /api/clubs/{id}`; `POST /api/join-requests`; `PATCH /api/join-requests/{id}`; `POST /api/teams`; exercise, plan and training-template collection `GET`/`POST` and item `PUT`/`DELETE`; `PATCH /api/users/{id}/role`.
 - Scalar domain fields are stored as native Table properties, while list fields use JSON-encoded string properties. Diagram JSON is written to a private `diagrams` blob container and returned as part of the exercise DTO.
 
 For production, set `GLOBAL_ADMIN_EMAILS` before the first user signs in and use a Microsoft Entra tenant policy appropriate for the clubs. User profiles and access decisions are application data; do not treat a client-supplied role or club ID as authoritative.

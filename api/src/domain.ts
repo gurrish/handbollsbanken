@@ -64,10 +64,57 @@ export interface TrainingPlan {
   date: string;
   duration: number;
   exerciseIds: string[];
+  customExercises?: CustomExercise[];
+  exerciseDurations?: Record<string, number>;
+  notes: string;
+}
+export interface CustomExercise {
+  id: string;
+  title: string;
+}
+export interface TrainingTemplate {
+  id: string;
+  clubId: string;
+  title: string;
+  duration: number;
+  exerciseIds: string[];
+  customExercises?: CustomExercise[];
   exerciseDurations?: Record<string, number>;
   notes: string;
 }
 
+const customExerciseInput = z.object({
+  id: z.string().min(1).max(80),
+  title: z.string().trim().min(1).max(100),
+}).strict();
+const trainingContentFields = {
+  title: z.string().trim().min(2).max(100),
+  duration: z.number().int().min(15).max(300),
+  exerciseIds: z.array(z.string().min(1).max(80)).max(50).refine((ids) => new Set(ids).size === ids.length, "Exercises cannot be duplicated.").default([]),
+  customExercises: z.array(customExerciseInput).max(50).default([]),
+  exerciseDurations: z.record(z.string().min(1).max(80), z.number().int().min(1).max(300)).optional(),
+  notes: z.string().trim().max(2000).default(""),
+};
+function validateTrainingContent(
+  content: { exerciseIds: string[]; customExercises: CustomExercise[]; exerciseDurations?: Record<string, number>; duration: number },
+  context: z.RefinementCtx,
+) {
+  const customIds = content.customExercises.map((exercise) => exercise.id);
+  if (new Set(customIds).size !== customIds.length) {
+    context.addIssue({ code: "custom", path: ["customExercises"], message: "Custom exercises cannot be duplicated." });
+  }
+  if (customIds.some((id) => !content.exerciseIds.includes(id))) {
+    context.addIssue({ code: "custom", path: ["customExercises"], message: "Every custom exercise must be included in the session." });
+  }
+  if (content.exerciseDurations) {
+    const durationIds = Object.keys(content.exerciseDurations);
+    if (durationIds.length !== content.exerciseIds.length || content.exerciseIds.some((id) => content.exerciseDurations?.[id] === undefined)) {
+      context.addIssue({ code: "custom", path: ["exerciseDurations"], message: "Set a duration for every selected exercise." });
+    } else if (content.exerciseIds.length && Object.values(content.exerciseDurations).reduce((total, minutes) => total + minutes, 0) !== content.duration) {
+      context.addIssue({ code: "custom", path: ["duration"], message: "Session duration must equal the total exercise duration." });
+    }
+  }
+}
 export const exerciseInput = z.object({
   title: z.string().trim().min(2).max(100),
   description: z.string().trim().max(2000).default(""),
@@ -85,27 +132,13 @@ export const exerciseInput = z.object({
 });
 export const planInput = z.object({
   teamId: z.string().min(1),
-  title: z.string().trim().min(2).max(100),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine((value) => {
     const parsed = new Date(`${value}T00:00:00.000Z`);
     return !Number.isNaN(parsed.valueOf()) && parsed.toISOString().slice(0, 10) === value;
   }, "Date must be a valid calendar date."),
-  duration: z.number().int().min(15).max(300),
-  exerciseIds: z.array(z.string()).max(50).refine((ids) => new Set(ids).size === ids.length, "Exercises cannot be duplicated.").default([]),
-  exerciseDurations: z.record(z.string().min(1), z.number().int().min(1).max(300)).optional(),
-  notes: z.string().trim().max(2000).default(""),
-}).superRefine((plan, context) => {
-  if (!plan.exerciseDurations) return;
-  const durationIds = Object.keys(plan.exerciseDurations);
-  if (durationIds.length !== plan.exerciseIds.length || plan.exerciseIds.some((id) => plan.exerciseDurations?.[id] === undefined)) {
-    context.addIssue({ code: "custom", path: ["exerciseDurations"], message: "Set a duration for every selected exercise." });
-    return;
-  }
-  const exerciseTotal = Object.values(plan.exerciseDurations).reduce((total, minutes) => total + minutes, 0);
-  if (plan.exerciseIds.length && exerciseTotal !== plan.duration) {
-    context.addIssue({ code: "custom", path: ["duration"], message: "Session duration must equal the total exercise duration." });
-  }
-});
+  ...trainingContentFields,
+}).superRefine(validateTrainingContent);
+export const templateInput = z.object(trainingContentFields).superRefine(validateTrainingContent);
 export const teamInput = z.object({
   name: z.string().trim().min(2).max(80),
   ageGroup: z.string().trim().min(1).max(40),

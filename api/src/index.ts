@@ -1,6 +1,6 @@
 import { app, type HttpRequest, type InvocationContext } from "@azure/functions";
 import { createHash, randomUUID } from "node:crypto";
-import { clubInput, decisionInput, displayNameInput, exerciseInput, interestedTeamsInput, joinRequestInput, planInput, roleInput, teamInput, type Club, type Exercise, type JoinRequest, type Role, type Team, type TrainingPlan, type User } from "./domain.js";
+import { clubInput, decisionInput, displayNameInput, exerciseInput, interestedTeamsInput, joinRequestInput, planInput, roleInput, teamInput, templateInput, type Club, type Exercise, type JoinRequest, type Role, type Team, type TrainingPlan, type TrainingTemplate, type User } from "./domain.js";
 import { getRepository, type Repository } from "./repository.js";
 
 interface Identity {
@@ -148,17 +148,17 @@ export async function handle(request: HttpRequest, context: InvocationContext): 
         : user.clubId && hasRole(user, "ClubAdmin")
           ? allRequests.filter((item) => item.clubId === user.clubId)
           : allRequests.filter((item) => item.userId === user.id);
-      const [teams, exercises, plans] = user.clubId && user.status === "approved"
+      const [teams, exercises, plans, templates] = user.clubId && user.status === "approved"
         ? await Promise.all([
             repo.list("Teams", user.clubId), listExercises(repo, user.clubId),
-            repo.list<TrainingPlan>("TrainingPlans", user.clubId),
+            repo.list<TrainingPlan>("TrainingPlans", user.clubId), repo.list<TrainingTemplate>("TrainingTemplates", user.clubId),
           ])
-        : [[], [], []];
+        : [[], [], [], []];
       const users = hasRole(user, "GlobalAdmin") || (user.clubId && user.status === "approved" && hasRole(user, "ClubAdmin"))
         ? await repo.list<User>("Users", "users")
         : [];
       return json({
-        user, clubs, teams, exercises, plans, requests,
+        user, clubs, teams, exercises, plans, templates, requests,
         users: hasRole(user, "GlobalAdmin") ? users : users.filter((item) => item.clubId === user.clubId),
       });
     }
@@ -296,7 +296,8 @@ export async function handle(request: HttpRequest, context: InvocationContext): 
       const team = await repo.get("Teams", clubId, data.teamId);
       if (!team) throw new HttpError(400, "Choose a team from your club.");
       const clubExercises = await repo.list<Exercise>("Exercises", clubId);
-      if (data.exerciseIds.some((exerciseId) => !clubExercises.some((exercise) => exercise.id === exerciseId))) {
+      const allowedExerciseIds = new Set([...clubExercises.map((exercise) => exercise.id), ...data.customExercises.map((exercise) => exercise.id)]);
+      if (data.exerciseIds.some((exerciseId) => !allowedExerciseIds.has(exerciseId))) {
         throw new HttpError(400, "Training plans can only use exercises from your club.");
       }
       const plan: TrainingPlan = { id: randomUUID(), clubId, ...data };
@@ -314,7 +315,8 @@ export async function handle(request: HttpRequest, context: InvocationContext): 
         repo.list<Exercise>("Exercises", clubId),
       ]);
       if (!team) throw new HttpError(400, "Choose a team from your club.");
-      if (data.exerciseIds.some((exerciseId) => !clubExercises.some((exercise) => exercise.id === exerciseId))) {
+      const allowedExerciseIds = new Set([...clubExercises.map((exercise) => exercise.id), ...data.customExercises.map((exercise) => exercise.id)]);
+      if (data.exerciseIds.some((exerciseId) => !allowedExerciseIds.has(exerciseId))) {
         throw new HttpError(400, "Training plans can only use exercises from your club.");
       }
       const updated = { ...current, ...data };
@@ -324,6 +326,42 @@ export async function handle(request: HttpRequest, context: InvocationContext): 
     if (resource === "plans" && id && method === "DELETE") {
       requireRole(user, "ClubAdmin", "Coach");
       await repo.delete("TrainingPlans", requireClub(user), id);
+      return json({ ok: true });
+    }
+    if (resource === "templates" && method === "GET") {
+      return json(await repo.list<TrainingTemplate>("TrainingTemplates", requireClub(user)));
+    }
+    if (resource === "templates" && method === "POST") {
+      requireRole(user, "ClubAdmin", "Coach");
+      const data = await body(request, templateInput);
+      const clubId = requireClub(user);
+      const clubExercises = await repo.list<Exercise>("Exercises", clubId);
+      const allowedExerciseIds = new Set([...clubExercises.map((exercise) => exercise.id), ...data.customExercises.map((exercise) => exercise.id)]);
+      if (data.exerciseIds.some((exerciseId) => !allowedExerciseIds.has(exerciseId))) {
+        throw new HttpError(400, "Training templates can only use exercises from your club.");
+      }
+      const template: TrainingTemplate = { id: randomUUID(), clubId, ...data };
+      await repo.upsert("TrainingTemplates", clubId, template);
+      return json(template, 201);
+    }
+    if (resource === "templates" && id && method === "PUT") {
+      requireRole(user, "ClubAdmin", "Coach");
+      const clubId = requireClub(user);
+      const current = await repo.get<TrainingTemplate>("TrainingTemplates", clubId, id);
+      if (!current) throw new HttpError(404, "Training template not found.");
+      const data = await body(request, templateInput);
+      const clubExercises = await repo.list<Exercise>("Exercises", clubId);
+      const allowedExerciseIds = new Set([...clubExercises.map((exercise) => exercise.id), ...data.customExercises.map((exercise) => exercise.id)]);
+      if (data.exerciseIds.some((exerciseId) => !allowedExerciseIds.has(exerciseId))) {
+        throw new HttpError(400, "Training templates can only use exercises from your club.");
+      }
+      const updated = { ...current, ...data };
+      await repo.upsert("TrainingTemplates", clubId, updated);
+      return json(updated);
+    }
+    if (resource === "templates" && id && method === "DELETE") {
+      requireRole(user, "ClubAdmin", "Coach");
+      await repo.delete("TrainingTemplates", requireClub(user), id);
       return json({ ok: true });
     }
     if (resource === "users" && id && action === "role" && method === "PATCH") {

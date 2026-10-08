@@ -14,11 +14,19 @@ export interface Exercise {
 }
 export interface TrainingPlan {
   id: string; clubId: string; teamId: string; title: string; date: string;
-  duration: number; exerciseIds: string[]; exerciseDurations?: Record<string, number>; notes: string
+  duration: number; exerciseIds: string[]; customExercises?: CustomExercise[];
+  exerciseDurations?: Record<string, number>; notes: string
+}
+export interface CustomExercise {
+  id: string; title: string
+}
+export interface TrainingTemplate {
+  id: string; clubId: string; title: string; duration: number; exerciseIds: string[];
+  customExercises?: CustomExercise[]; exerciseDurations?: Record<string, number>; notes: string
 }
 export interface Bootstrap {
   user: User; clubs: Club[]; teams: Team[]; exercises: Exercise[];
-  plans: TrainingPlan[]; requests: JoinRequest[]; users: User[]
+  plans: TrainingPlan[]; templates: TrainingTemplate[]; requests: JoinRequest[]; users: User[]
 }
 export interface DiagramItem {
   id: string; type: "player" | "keeper" | "cone" | "goal" | "ball" | "arrow" | "pass" | "movement" | "text";
