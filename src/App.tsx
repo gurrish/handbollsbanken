@@ -18,7 +18,10 @@ const navItems: { id: Page; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "templates", label: "Training templates", icon: Copy },
   { id: "admin", label: "Club administration", icon: Users },
 ];
-const demoCategories = ["Attack", "Passing", "Shooting", "Defense", "Warm-up", "Footwork", "Core", "Other"];
+const demoCategories = ["Attack", "Passing", "Shooting", "Defense", "Warm-up", "Footwork", "Conditioning", "Goalkeeper", "Other"];
+function exerciseCategoryLabel(category: string) {
+  return category === "Core" ? "Conditioning" : category;
+}
 const ageGroups = [
   { value: "HBS", label: "HBS (6–8)" },
   { value: "U9", label: "U9" },
@@ -108,7 +111,7 @@ export default function App() {
   const filteredExercises = useMemo(() => (data?.exercises || []).filter((exercise) => {
     const textMatch = `${exercise.title} ${exercise.description} ${exercise.tags.join(" ")}`.toLowerCase().includes(query.toLowerCase());
     return textMatch && (ageFilter === "All ages" || exercise.ageGroup === ageFilter)
-      && (categoryFilter === "All categories" || exercise.category === categoryFilter)
+      && (categoryFilter === "All categories" || exerciseCategoryLabel(exercise.category) === categoryFilter)
       && (complexityFilter === "All levels" || exercise.complexity === complexityFilter);
   }), [data?.exercises, query, ageFilter, categoryFilter, complexityFilter]);
   const sharedTraining = data?.plans.find((plan) => plan.id === sharedTrainingId);
@@ -592,7 +595,7 @@ function LibraryPage(props: {
   onCreate: () => void; onOpen: (id: string) => void; onEdit: (exercise: Exercise) => void; onDelete: (exercise: Exercise) => void;
 }) {
   const ages = [...new Set(props.exercises.map((exercise) => exercise.ageGroup))];
-  const categories = [...new Set([...demoCategories, ...props.exercises.map((exercise) => exercise.category)])];
+  const categories = [...new Set([...demoCategories, ...props.exercises.map((exercise) => exerciseCategoryLabel(exercise.category))])];
   return localize(<div className="content-page">
     <div className="page-intro"><div><span className="section-kicker">THE CLUB PLAYBOOK</span><h1>Exercise library<span className="title-count">{props.total}</span></h1><p>Good ideas are worth keeping. Find a drill, make it yours, and get the team moving.</p></div>{props.canEdit && <Button onClick={props.onCreate}><Plus size={16} /> Add exercise</Button>}</div>
     <Card className="library-toolbar"><div className="search-box"><Search size={17} /><Input placeholder="Search exercises, skills or tags…" value={props.query} onChange={(event) => props.setQuery(event.target.value)} /></div><div className="filter-label"><Filter size={14} />FILTER BY</div>
@@ -605,14 +608,14 @@ function LibraryPage(props: {
   </div>);
 }
 function ExerciseCard({ exercise, canEdit, onOpen, onEdit, onDelete }: { exercise: Exercise; canEdit: boolean; onOpen: () => void; onEdit: () => void; onDelete: () => void }) {
-  return localize(<Card className="exercise-card"><div className="exercise-card-body"><div className="exercise-meta"><Badge>{exercise.ageGroup}</Badge><span className={`complexity-dot complexity-${exercise.complexity.toLowerCase()}`} /> <span>{exercise.complexity}</span><span className="exercise-category">{exercise.category}</span></div><h3 data-no-translate>{exercise.title}</h3><p data-no-translate={Boolean(exercise.description)}>{exercise.description || "A club drill, ready to take to the court."}</p><div className="exercise-tags">{exercise.tags.slice(0, 3).map((tag) => <span key={tag} data-no-translate>#{tag}</span>)}</div><div className="exercise-card-foot card-actions"><Button onClick={onOpen} variant="secondary" className="exercise-open">View exercise <ArrowUpRight size={15} /></Button>{canEdit && <div className="exercise-actions"><Button variant="ghost" onClick={onEdit}>Edit</Button><Button variant="ghost" onClick={onDelete}>Delete</Button></div>}</div></div></Card>);
+  return localize(<Card className="exercise-card"><div className="exercise-card-body"><div className="exercise-meta"><Badge>{exercise.ageGroup}</Badge><span className={`complexity-dot complexity-${exercise.complexity.toLowerCase()}`} /> <span>{exercise.complexity}</span><span className="exercise-category">{exerciseCategoryLabel(exercise.category)}</span></div><h3 data-no-translate>{exercise.title}</h3><p data-no-translate={Boolean(exercise.description)}>{exercise.description || "A club drill, ready to take to the court."}</p><div className="exercise-tags">{exercise.tags.slice(0, 3).map((tag) => <span key={tag} data-no-translate>#{tag}</span>)}</div><div className="exercise-card-foot card-actions"><Button onClick={onOpen} variant="secondary" className="exercise-open">View exercise <ArrowUpRight size={15} /></Button>{canEdit && <div className="exercise-actions"><Button variant="ghost" onClick={onEdit}>Edit</Button><Button variant="ghost" onClick={onDelete}>Delete</Button></div>}</div></div></Card>);
 }
 
 function ExerciseForm({ exercise, canEdit, saving, inline = false, onClose, onSave }: { exercise?: Exercise; canEdit: boolean; saving: boolean; inline?: boolean; onClose: () => void; onSave: (data: Omit<Exercise, "id" | "clubId" | "createdBy">) => Promise<void> }) {
   const [title, setTitle] = useState(exercise?.title || "");
   const [description, setDescription] = useState(exercise?.description || "");
   const [ageGroup, setAgeGroup] = useState(exercise?.ageGroup || "U14");
-  const [category, setCategory] = useState(exercise?.category || "Passing");
+  const [category, setCategory] = useState(exercise ? exerciseCategoryLabel(exercise.category) : "Passing");
   const [complexity, setComplexity] = useState(exercise?.complexity || "Intermediate");
   const [tags, setTags] = useState(exercise?.tags.join(", ") || "");
   const form = <form className={`modal-form ${inline ? "inline-plan-form" : ""}`} onSubmit={(event) => {
@@ -633,14 +636,14 @@ function ExerciseDetailPage({ exercise, canEdit, saving: savingDetails, startEdi
   useEffect(() => setEditing(startEditing), [startEditing]);
   return localize(<div className="content-page exercise-detail">
     <div className="page-intro exercise-detail-heading">
-      <div><span className="section-kicker">SHARED EXERCISE · CLUB MEMBERS</span><h1 data-no-translate={Boolean(exercise)}>{exercise?.title || "Exercise unavailable"}</h1><p>{exercise ? `${exercise.category} · ${exercise.ageGroup} · ${exercise.complexity}` : "This exercise may have been removed, or you may not have access to its club."}</p></div>
+      <div><span className="section-kicker">SHARED EXERCISE · CLUB MEMBERS</span><h1 data-no-translate={Boolean(exercise)}>{exercise?.title || "Exercise unavailable"}</h1><p>{exercise ? `${exerciseCategoryLabel(exercise.category)} · ${exercise.ageGroup} · ${exercise.complexity}` : "This exercise may have been removed, or you may not have access to its club."}</p></div>
       <div className="training-detail-actions exercise-detail-controls"><Button variant="secondary" onClick={onBack}><ArrowLeft size={15} /> Exercise library</Button>{exercise && <>{canEdit && <Button variant="secondary" onClick={() => setEditing((value) => !value)}><Pencil size={15} />{editing ? "Cancel edit" : "Edit details"}</Button>}{!editing && <><Button variant="secondary" onClick={onShare}><Copy size={15} /> Copy link</Button><Button onClick={() => window.print()}><Printer size={15} /> Export PDF</Button></>}</>}</div>
     </div>
     {exercise && <div className="exercise-print-content">
       {editing && canEdit ? <ExerciseForm inline exercise={exercise} canEdit={canEdit} saving={savingDetails} onClose={() => setEditing(false)} onSave={async (value) => {
         if (await onSave(value)) setEditing(false);
       }} /> : <Card className="exercise-detail-card">
-        <div className="exercise-detail-meta"><Badge>{exercise.ageGroup}</Badge><Badge tone="green">{exercise.complexity}</Badge><span>{exercise.category}</span></div>
+        <div className="exercise-detail-meta"><Badge>{exercise.ageGroup}</Badge><Badge tone="green">{exercise.complexity}</Badge><span>{exerciseCategoryLabel(exercise.category)}</span></div>
         <h2 data-no-translate>{exercise.title}</h2>
         <p className="exercise-detail-description" data-no-translate>{exercise.description || "A club drill, ready to take to the court."}</p>
         {exercise.tags.length > 0 && <div className="exercise-tags">{exercise.tags.map((tag) => <span key={tag} data-no-translate>#{tag}</span>)}</div>}
@@ -865,7 +868,7 @@ function PlanForm({ mode = "plan", plan, template, teams = [], exercises, templa
     : duration;
   const ordered = exerciseIds.map((id) => {
     const exercise = exercises.find((item) => item.id === id);
-    if (exercise) return { id, title: exercise.title, detail: `${exercise.category} · ${exercise.ageGroup}` };
+    if (exercise) return { id, title: exercise.title, detail: `${exerciseCategoryLabel(exercise.category)} · ${exercise.ageGroup}` };
     const custom = customExercises.find((item) => item.id === id);
     return custom ? { id, title: custom.title, detail: "Free-text exercise" } : null;
   }).filter((item): item is { id: string; title: string; detail: string } => item !== null);
@@ -929,7 +932,7 @@ function PlanForm({ mode = "plan", plan, template, teams = [], exercises, templa
       <Input id="plan-exercise-search" type="search" value={exerciseSearch} onChange={(event) => setExerciseSearch(event.target.value)} placeholder="Search exercises…" disabled={exerciseIds.length >= 50} />
       <Select id="plan-exercise-picker" value="" aria-label="Choose a matching exercise" disabled={exerciseIds.length >= 50 || exercises.every((exercise) => exerciseIds.includes(exercise.id))} onChange={(event) => addExercise(event.target.value)}>
         <option value="">{exercises.some((exercise) => !exerciseIds.includes(exercise.id)) ? "Choose an exercise…" : "All exercises added"}</option>
-        {exercises.filter((exercise) => !exerciseIds.includes(exercise.id) && `${exercise.title} ${exercise.category} ${exercise.description} ${exercise.tags.join(" ")}`.toLowerCase().includes(exerciseSearch.trim().toLowerCase())).map((exercise) => <option key={exercise.id} value={exercise.id}>{exercise.title} · {exercise.category}</option>)}
+        {exercises.filter((exercise) => !exerciseIds.includes(exercise.id) && `${exercise.title} ${exerciseCategoryLabel(exercise.category)} ${exercise.description} ${exercise.tags.join(" ")}`.toLowerCase().includes(exerciseSearch.trim().toLowerCase())).map((exercise) => <option key={exercise.id} value={exercise.id}>{exercise.title} · {exerciseCategoryLabel(exercise.category)}</option>)}
       </Select>
     </div>
     <div className="form-field">
