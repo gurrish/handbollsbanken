@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Activity, ArrowDown, ArrowLeft, ArrowUp, ArrowUpRight, CalendarDays, Check, ChevronDown, CircleHelp,
-  Clock3, Copy, Dumbbell, Filter, LayoutDashboard, Library, LogOut, Menu,
+  Clock3, Copy, Dumbbell, Filter, LayoutDashboard, Library, LogOut, Menu, Printer,
   Pencil, Plus, Search, Share2, Shield, Sparkles, Users, X,
 } from "lucide-react";
 import DiagramEditor from "./components/DiagramEditor";
@@ -10,12 +10,11 @@ import { api, loadBootstrap, saveExercise, savePlan, saveTemplate } from "./lib/
 import { LanguageSelect, localize, translateText, useLocale } from "./lib/i18n";
 import type { Bootstrap, Exercise, Role, TrainingPlan, TrainingTemplate } from "./types";
 
-type Page = "overview" | "library" | "planner" | "diagram" | "admin";
+type Page = "overview" | "library" | "planner" | "admin";
 const navItems: { id: Page; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
   { id: "library", label: "Exercise library", icon: Library },
   { id: "planner", label: "Training planner", icon: CalendarDays },
-  { id: "diagram", label: "Diagram editor", icon: Activity },
   { id: "admin", label: "Club administration", icon: Users },
 ];
 const demoCategories = ["Attack", "Passing", "Shooting", "Defense", "Warm-up", "Footwork"];
@@ -39,8 +38,12 @@ function dateLabel(value: string, options?: Intl.DateTimeFormatOptions, locale: 
 export default function App() {
   const { locale } = useLocale();
   const [data, setData] = useState<Bootstrap | null>(null);
-  const [page, setPage] = useState<Page>(() => new URLSearchParams(window.location.search).has("training") ? "planner" : "overview");
+  const [page, setPage] = useState<Page>(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.has("training") ? "planner" : params.has("exercise") ? "library" : "overview";
+  });
   const [sharedTrainingId, setSharedTrainingId] = useState(() => new URLSearchParams(window.location.search).get("training"));
+  const [sharedExerciseId, setSharedExerciseId] = useState(() => new URLSearchParams(window.location.search).get("exercise"));
   const [loading, setLoading] = useState(true);
   const [signedIn, setSignedIn] = useState(import.meta.env.DEV);
   const [error, setError] = useState("");
@@ -56,7 +59,6 @@ export default function App() {
   const [scheduleTemplate, setScheduleTemplate] = useState<TrainingTemplate | false>(false);
   const [editingTrainingId, setEditingTrainingId] = useState<string | null>(null);
   const [teamModal, setTeamModal] = useState<Bootstrap["teams"][number] | false>(false);
-  const [diagramExerciseId, setDiagramExerciseId] = useState("");
   const [clubName, setClubName] = useState("");
   const [teamName, setTeamName] = useState("");
   const [teamAge, setTeamAge] = useState("U14");
@@ -69,7 +71,6 @@ export default function App() {
       const result = await loadBootstrap();
       setData(result);
       setSelectedClub((current) => current || result.clubs[0]?.id || "");
-      setDiagramExerciseId((current) => current || result.exercises[0]?.id || "");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to load your club.");
     } finally {
@@ -104,7 +105,10 @@ export default function App() {
       && (complexityFilter === "All levels" || exercise.complexity === complexityFilter);
   }), [data?.exercises, query, ageFilter, categoryFilter, complexityFilter]);
   const sharedTraining = data?.plans.find((plan) => plan.id === sharedTrainingId);
-  const pageTitle = sharedTrainingId ? sharedTraining?.title || "Shared training" : navItems.find((item) => item.id === page)?.label || "Overview";
+  const sharedExercise = data?.exercises.find((exercise) => exercise.id === sharedExerciseId);
+  const pageTitle = sharedTrainingId ? sharedTraining?.title || "Shared training"
+    : sharedExerciseId ? sharedExercise?.title || "Shared exercise"
+      : navItems.find((item) => item.id === page)?.label || "Overview";
   const club = data?.clubs.find((item) => item.id === data.user.clubId);
 
   const act = async (action: () => Promise<unknown>, success?: string): Promise<boolean> => {
@@ -123,23 +127,37 @@ export default function App() {
     }
   };
   const logout = () => { window.location.href = "/.auth/logout"; };
-  const clearTrainingLink = (replace = true) => {
+  const clearSharedLink = (replace = true) => {
     const url = new URL(window.location.href);
     url.searchParams.delete("training");
+    url.searchParams.delete("exercise");
     window.history[replace ? "replaceState" : "pushState"]({}, "", url);
     setSharedTrainingId(null);
+    setSharedExerciseId(null);
   };
   const changePage = (value: Page) => {
-    if (sharedTrainingId) clearTrainingLink();
+    if (sharedTrainingId || sharedExerciseId) clearSharedLink();
     setPage(value);
     setMobileOpen(false);
   };
   const openTraining = (id: string, edit = false) => {
     const url = new URL(window.location.href);
     url.searchParams.set("training", id);
+    url.searchParams.delete("exercise");
     window.history.pushState({}, "", url);
     setSharedTrainingId(id);
+    setSharedExerciseId(null);
     setEditingTrainingId(edit ? id : null);
+    setMobileOpen(false);
+  };
+  const openExercise = (id: string) => {
+    const url = new URL(window.location.href);
+    url.searchParams.set("exercise", id);
+    url.searchParams.delete("training");
+    window.history.pushState({}, "", url);
+    setSharedExerciseId(id);
+    setSharedTrainingId(null);
+    setPage("library");
     setMobileOpen(false);
   };
   const copyTrainingLink = async (id: string) => {
@@ -152,11 +170,26 @@ export default function App() {
       setError("Could not copy the link. Check clipboard permissions and try again.");
     }
   };
+  const copyExerciseLink = async (id: string) => {
+    const url = new URL(window.location.href);
+    url.searchParams.set("exercise", id);
+    url.searchParams.delete("training");
+    try {
+      await navigator.clipboard.writeText(url.toString());
+      setMessage("Exercise link copied. Only signed-in club members can open it.");
+    } catch {
+      setError("Could not copy the link. Check clipboard permissions and try again.");
+    }
+  };
   useEffect(() => {
     const handlePopState = () => {
-      const id = new URLSearchParams(window.location.search).get("training");
-      setSharedTrainingId(id);
-      setPage("planner");
+      const params = new URLSearchParams(window.location.search);
+      const trainingId = params.get("training");
+      const exerciseId = params.get("exercise");
+      setSharedTrainingId(trainingId);
+      setSharedExerciseId(exerciseId);
+      if (trainingId) setPage("planner");
+      else if (exerciseId) setPage("library");
     };
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
@@ -260,29 +293,34 @@ export default function App() {
             canEdit={canEdit}
             saving={saving}
             startEditing={editingTrainingId === sharedTrainingId}
-            onBack={() => { clearTrainingLink(); setPage("planner"); }}
+            onBack={() => { clearSharedLink(); setPage("planner"); }}
             onShare={() => { if (sharedTraining) void copyTrainingLink(sharedTraining.id); }}
             onSave={async (value) => {
               if (!sharedTraining) return false;
               return act(() => savePlan(value, sharedTraining.id), "Session updated.");
             }}
-          /> : !sharedTrainingId && page === "overview" && <Overview data={data} clubName={club?.name || "your club"} onNavigate={changePage} />}
-          {!sharedTrainingId && page === "library" && <LibraryPage
+          /> : sharedExerciseId ? <ExerciseDetailPage
+            exercise={sharedExercise}
+            canEdit={canEdit}
+            onBack={() => { clearSharedLink(); setPage("library"); }}
+            onShare={() => { if (sharedExercise) void copyExerciseLink(sharedExercise.id); }}
+            onEdit={() => { if (sharedExercise) setExerciseModal(sharedExercise); }}
+            onSaveDiagram={async (diagramJson) => {
+              if (!sharedExercise) return;
+              await saveExercise({ ...sharedExercise, diagramJson }, sharedExercise.id);
+              await refresh();
+              setMessage("Diagram saved to exercise.");
+            }}
+          /> : !sharedTrainingId && !sharedExerciseId && page === "overview" && <Overview data={data} clubName={club?.name || "your club"} onNavigate={changePage} />}
+          {!sharedTrainingId && !sharedExerciseId && page === "library" && <LibraryPage
             exercises={filteredExercises} total={data.exercises.length} query={query} setQuery={setQuery}
             ageFilter={ageFilter} setAgeFilter={setAgeFilter} categoryFilter={categoryFilter} setCategoryFilter={setCategoryFilter}
             complexityFilter={complexityFilter} setComplexityFilter={setComplexityFilter} canEdit={canEdit}
-            onCreate={() => setExerciseModal(null)} onEdit={(exercise) => setExerciseModal(exercise)}
+            onCreate={() => setExerciseModal(null)} onOpen={openExercise} onEdit={(exercise) => setExerciseModal(exercise)}
             onDelete={(exercise) => { if (window.confirm(translateText(`Delete “${exercise.title}”? This cannot be undone.`))) void act(() => api(`exercises/${exercise.id}`, { method: "DELETE" }), "Exercise deleted."); }}
           />}
-          {!sharedTrainingId && page === "planner" && <PlannerPage data={data} exerciseById={exerciseById} canEdit={canEdit} saving={saving} onTeamsChange={(teamIds) => act(() => api("users/me/teams", { method: "PATCH", body: JSON.stringify({ teamIds }) }), "Team preferences saved.")} onCreate={() => setPlanModal(null)} onCreateTemplate={() => setTemplateModal(null)} onEdit={(plan) => openTraining(plan.id, true)} onOpen={openTraining} onShare={(id) => void copyTrainingLink(id)} onSchedule={(template) => setScheduleTemplate(template)} onEditTemplate={(template) => setTemplateModal(template)} onDeleteTemplate={(template) => { if (window.confirm(translateText(`Delete “${template.title}”?`))) void act(() => api(`templates/${template.id}`, { method: "DELETE" }), "Template deleted."); }} onDelete={(plan) => { if (window.confirm(translateText(`Delete “${plan.title}”?`))) void act(() => api(`plans/${plan.id}`, { method: "DELETE" }), "Session deleted."); }} />}
-          {!sharedTrainingId && page === "diagram" && <DiagramPage exercises={data.exercises} selectedId={diagramExerciseId} setSelectedId={setDiagramExerciseId} canEdit={canEdit} onNavigate={changePage} onSave={async (diagramJson) => {
-            const exercise = exerciseById.get(diagramExerciseId);
-            if (!exercise) throw new Error("Choose an exercise first.");
-            await saveExercise({ ...exercise, diagramJson }, exercise.id);
-            await refresh();
-            setMessage("Diagram saved to exercise.");
-          }} />}
-          {!sharedTrainingId && page === "admin" && <AdminPage data={data} isGlobalAdmin={isGlobalAdmin} saving={saving} onCreateClub={() => void act(() => api("clubs", { method: "POST", body: JSON.stringify({ name: clubName }) }), "Club created.")} onRenameClub={(club) => { const name = window.prompt(translateText("Rename club"), club.name)?.trim(); if (name && name !== club.name) void act(() => api(`clubs/${club.id}`, { method: "PUT", body: JSON.stringify({ name }) }), "Club name updated."); }} onClubName={setClubName} clubName={clubName} onCreateTeam={() => void act(() => api("teams", { method: "POST", body: JSON.stringify({ name: teamName, ageGroup: teamAge }) }), "Team created.")} onEditTeam={(team) => setTeamModal(team)} onTeamName={setTeamName} teamName={teamName} teamAge={teamAge} onTeamAge={setTeamAge} onDecision={(request, status) => void act(() => api(`join-requests/${request.id}`, { method: "PATCH", body: JSON.stringify({ status }) }), status === "approved" ? "Coach approved." : "Request declined.")} onRoleChange={(userId, role) => void act(() => api(`users/${userId}/role`, { method: "PATCH", body: JSON.stringify({ role }) }), "Role updated.")} />}
+          {!sharedTrainingId && !sharedExerciseId && page === "planner" && <PlannerPage data={data} exerciseById={exerciseById} canEdit={canEdit} saving={saving} onTeamsChange={(teamIds) => act(() => api("users/me/teams", { method: "PATCH", body: JSON.stringify({ teamIds }) }), "Team preferences saved.")} onCreate={() => setPlanModal(null)} onCreateTemplate={() => setTemplateModal(null)} onEdit={(plan) => openTraining(plan.id, true)} onOpen={openTraining} onShare={(id) => void copyTrainingLink(id)} onSchedule={(template) => setScheduleTemplate(template)} onEditTemplate={(template) => setTemplateModal(template)} onDeleteTemplate={(template) => { if (window.confirm(translateText(`Delete “${template.title}”?`))) void act(() => api(`templates/${template.id}`, { method: "DELETE" }), "Template deleted."); }} onDelete={(plan) => { if (window.confirm(translateText(`Delete “${plan.title}”?`))) void act(() => api(`plans/${plan.id}`, { method: "DELETE" }), "Session deleted."); }} />}
+          {!sharedTrainingId && !sharedExerciseId && page === "admin" && <AdminPage data={data} isGlobalAdmin={isGlobalAdmin} saving={saving} onCreateClub={() => void act(() => api("clubs", { method: "POST", body: JSON.stringify({ name: clubName }) }), "Club created.")} onRenameClub={(club) => { const name = window.prompt(translateText("Rename club"), club.name)?.trim(); if (name && name !== club.name) void act(() => api(`clubs/${club.id}`, { method: "PUT", body: JSON.stringify({ name }) }), "Club name updated."); }} onClubName={setClubName} clubName={clubName} onCreateTeam={() => void act(() => api("teams", { method: "POST", body: JSON.stringify({ name: teamName, ageGroup: teamAge }) }), "Team created.")} onEditTeam={(team) => setTeamModal(team)} onTeamName={setTeamName} teamName={teamName} teamAge={teamAge} onTeamAge={setTeamAge} onDecision={(request, status) => void act(() => api(`join-requests/${request.id}`, { method: "PATCH", body: JSON.stringify({ status }) }), status === "approved" ? "Coach approved." : "Request declined.")} onRoleChange={(userId, role) => void act(() => api(`users/${userId}/role`, { method: "PATCH", body: JSON.stringify({ role }) }), "Role updated.")} />}
         </div>
       </main>
       {exerciseModal !== false && <ExerciseForm exercise={exerciseModal || undefined} canEdit={canEdit} saving={saving} onClose={() => setExerciseModal(false)} onSave={async (value) => {
@@ -364,7 +402,7 @@ function Overview({ data, clubName, onNavigate }: { data: Bootstrap; clubName: s
         {upcoming.length ? <div className="session-list">{upcoming.map((plan) => <SessionRow key={plan.id} plan={plan} data={data} />)}</div> : <EmptyState icon={CalendarDays} title="Your court is open" text="Create your first session and get the team moving." action="Plan a session" onClick={() => onNavigate("planner")} />}
       </Card>
       <div className="overview-right">
-        <Card className="quick-card"><div className="quick-heading"><span className="section-kicker">QUICK START</span><h3>What are we working on?</h3><p>Jump straight into the good stuff.</p></div><button className="quick-link" onClick={() => onNavigate("library")}><div className="quick-icon quick-blue"><Library size={18} /></div><span><strong>Find an exercise</strong><small>Explore your club’s library</small></span><ArrowUpRight size={16} /></button><button className="quick-link" onClick={() => onNavigate("diagram")}><div className="quick-icon quick-green"><Activity size={18} /></div><span><strong>Sketch a play</strong><small>Show the team your idea</small></span><ArrowUpRight size={16} /></button></Card>
+        <Card className="quick-card"><div className="quick-heading"><span className="section-kicker">QUICK START</span><h3>What are we working on?</h3><p>Jump straight into the good stuff.</p></div><button className="quick-link" onClick={() => onNavigate("library")}><div className="quick-icon quick-blue"><Library size={18} /></div><span><strong>Find an exercise</strong><small>Explore your club’s library</small></span><ArrowUpRight size={16} /></button></Card>
         <Card className="coach-tip"><div className="tip-graphic"><Sparkles size={18} /></div><div><span className="section-kicker">A LITTLE REMINDER</span><p>“Great teams are built one good repetition at a time.”</p><span className="tip-byline">Take it one drill at a time.</span></div></Card>
         {pending > 0 && <button className="pending-banner" onClick={() => onNavigate("admin")}><div className="pending-badge">{pending}</div><span><strong>{pending > 1 ? "Coach requests to review" : "Coach request to review"}</strong><small>Your club is waiting on you</small></span><ArrowUpRight size={16} /></button>}
       </div>
@@ -387,7 +425,7 @@ function LibraryPage(props: {
   exercises: Exercise[]; total: number; query: string; setQuery: (value: string) => void;
   ageFilter: string; setAgeFilter: (value: string) => void; categoryFilter: string; setCategoryFilter: (value: string) => void;
   complexityFilter: string; setComplexityFilter: (value: string) => void; canEdit: boolean;
-  onCreate: () => void; onEdit: (exercise: Exercise) => void; onDelete: (exercise: Exercise) => void;
+  onCreate: () => void; onOpen: (id: string) => void; onEdit: (exercise: Exercise) => void; onDelete: (exercise: Exercise) => void;
 }) {
   const ages = [...new Set(props.exercises.map((exercise) => exercise.ageGroup))];
   const categories = [...new Set([...demoCategories, ...props.exercises.map((exercise) => exercise.category)])];
@@ -398,12 +436,12 @@ function LibraryPage(props: {
       <Select aria-label="Filter by category" value={props.categoryFilter} onChange={(event) => props.setCategoryFilter(event.target.value)}><option>All categories</option>{categories.map((value) => <option key={value}>{value}</option>)}</Select>
       <Select aria-label="Filter by complexity" value={props.complexityFilter} onChange={(event) => props.setComplexityFilter(event.target.value)}><option>All levels</option>{["Beginner", "Intermediate", "Advanced"].map((value) => <option key={value}>{value}</option>)}</Select>
     </Card>
-    {props.exercises.length ? <div className="exercise-grid">{props.exercises.map((exercise) => <ExerciseCard key={exercise.id} exercise={exercise} canEdit={props.canEdit} onEdit={() => props.onEdit(exercise)} onDelete={() => props.onDelete(exercise)} />)}</div> : <Card><EmptyState icon={Library} title={props.total ? "No drills match those filters" : "Start your club’s playbook"} text={props.total ? "Try widening your search or filters." : "Add your first exercise so coaches can build it into a session."} action={props.total ? "Clear filters" : "Add an exercise"} onClick={props.total ? () => { props.setQuery(""); props.setAgeFilter("All ages"); props.setCategoryFilter("All categories"); props.setComplexityFilter("All levels"); } : props.onCreate} /></Card>}
+    {props.exercises.length ? <div className="exercise-grid">{props.exercises.map((exercise) => <ExerciseCard key={exercise.id} exercise={exercise} canEdit={props.canEdit} onOpen={() => props.onOpen(exercise.id)} onEdit={() => props.onEdit(exercise)} onDelete={() => props.onDelete(exercise)} />)}</div> : <Card><EmptyState icon={Library} title={props.total ? "No drills match those filters" : "Start your club’s playbook"} text={props.total ? "Try widening your search or filters." : "Add your first exercise so coaches can build it into a session."} action={props.total ? "Clear filters" : "Add an exercise"} onClick={props.total ? () => { props.setQuery(""); props.setAgeFilter("All ages"); props.setCategoryFilter("All categories"); props.setComplexityFilter("All levels"); } : props.onCreate} /></Card>}
     <div className="results-note">SHOWING {props.exercises.length} OF {props.total} EXERCISES <span>·</span> SHARED WITH YOUR CLUB</div>
   </div>);
 }
-function ExerciseCard({ exercise, canEdit, onEdit, onDelete }: { exercise: Exercise; canEdit: boolean; onEdit: () => void; onDelete: () => void }) {
-  return localize(<Card className="exercise-card"><div className="exercise-card-body"><div className="exercise-meta"><Badge>{exercise.ageGroup}</Badge><span className={`complexity-dot complexity-${exercise.complexity.toLowerCase()}`} /> <span>{exercise.complexity}</span><span className="exercise-category">{exercise.category}</span></div><h3 data-no-translate>{exercise.title}</h3><p data-no-translate={Boolean(exercise.description)}>{exercise.description || "A club drill, ready to take to the court."}</p><div className="exercise-tags">{exercise.tags.slice(0, 3).map((tag) => <span key={tag} data-no-translate>#{tag}</span>)}</div><div className="exercise-card-foot"><button onClick={onEdit} className="exercise-open">View exercise <ArrowUpRight size={15} /></button>{canEdit && <div className="exercise-actions"><button onClick={onEdit}>Edit</button><button onClick={onDelete}>Delete</button></div>}</div></div></Card>);
+function ExerciseCard({ exercise, canEdit, onOpen, onEdit, onDelete }: { exercise: Exercise; canEdit: boolean; onOpen: () => void; onEdit: () => void; onDelete: () => void }) {
+  return localize(<Card className="exercise-card"><div className="exercise-card-body"><div className="exercise-meta"><Badge>{exercise.ageGroup}</Badge><span className={`complexity-dot complexity-${exercise.complexity.toLowerCase()}`} /> <span>{exercise.complexity}</span><span className="exercise-category">{exercise.category}</span></div><h3 data-no-translate>{exercise.title}</h3><p data-no-translate={Boolean(exercise.description)}>{exercise.description || "A club drill, ready to take to the court."}</p><div className="exercise-tags">{exercise.tags.slice(0, 3).map((tag) => <span key={tag} data-no-translate>#{tag}</span>)}</div><div className="exercise-card-foot"><button onClick={onOpen} className="exercise-open">View exercise <ArrowUpRight size={15} /></button>{canEdit && <div className="exercise-actions"><button onClick={onEdit}>Edit</button><button onClick={onDelete}>Delete</button></div>}</div></div></Card>);
 }
 
 function ExerciseForm({ exercise, canEdit, saving, onClose, onSave }: { exercise?: Exercise; canEdit: boolean; saving: boolean; onClose: () => void; onSave: (data: Omit<Exercise, "id" | "clubId" | "createdBy">) => Promise<void> }) {
@@ -418,6 +456,48 @@ function ExerciseForm({ exercise, canEdit, saving, onClose, onSave }: { exercise
     if (!canEdit) return;
     void onSave({ title, description, ageGroup, category, complexity, tags: tags.split(",").map((tag) => tag.trim()).filter(Boolean), diagramJson: exercise?.diagramJson || "[]" });
   }}><p className="modal-lead">{canEdit ? "Build a drill your whole club can put to use." : "A drill shared with your club."}</p><Field label="Exercise name"><Input autoFocus required minLength={2} maxLength={100} value={title} onChange={(event) => setTitle(event.target.value)} placeholder="e.g. Three-lane passing" disabled={!canEdit} /></Field><Field label="What’s the idea?"><Textarea rows={3} maxLength={2000} value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Describe the setup, movement and coaching points…" disabled={!canEdit} /></Field><div className="form-row"><Field label="Age group"><Select value={ageGroup} onChange={(event) => setAgeGroup(event.target.value)} disabled={!canEdit}>{ageGroups.map(({ value, label }) => <option key={value} value={value}>{label}</option>)}<option>All ages</option></Select></Field><Field label="Category"><Select value={category} onChange={(event) => setCategory(event.target.value)} disabled={!canEdit}>{demoCategories.map((value) => <option key={value}>{value}</option>)}</Select></Field></div><div className="form-row"><Field label="Complexity"><Select value={complexity} onChange={(event) => setComplexity(event.target.value)} disabled={!canEdit}>{["Beginner", "Intermediate", "Advanced"].map((value) => <option key={value}>{value}</option>)}</Select></Field><Field label="Tags" hint="Separate tags with commas"><Input value={tags} onChange={(event) => setTags(event.target.value)} placeholder="e.g. passing, speed" disabled={!canEdit} /></Field></div><div className="modal-actions"><Button type="button" variant="ghost" onClick={onClose}>{canEdit ? "Cancel" : "Close"}</Button>{canEdit && <Button type="submit" disabled={saving}>{saving ? "Saving…" : exercise ? "Save changes" : "Add to library"} <ArrowUpRight size={15} /></Button>}</div></form></Modal>);
+}
+
+function ExerciseDetailPage({ exercise, canEdit, onBack, onShare, onEdit, onSaveDiagram }: {
+  exercise?: Exercise; canEdit: boolean; onBack: () => void; onShare: () => void; onEdit: () => void;
+  onSaveDiagram: (diagramJson: string) => Promise<void>;
+}) {
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  return localize(<div className="content-page exercise-detail">
+    <div className="page-intro exercise-detail-heading">
+      <div><span className="section-kicker">SHARED EXERCISE · CLUB MEMBERS</span><h1 data-no-translate={Boolean(exercise)}>{exercise?.title || "Exercise unavailable"}</h1><p>{exercise ? `${exercise.category} · ${exercise.ageGroup} · ${exercise.complexity}` : "This exercise may have been removed, or you may not have access to its club."}</p></div>
+      <div className="training-detail-actions exercise-detail-controls"><Button variant="secondary" onClick={onBack}><ArrowLeft size={15} /> Exercise library</Button>{exercise && <>{canEdit && <Button variant="secondary" onClick={onEdit}><Pencil size={15} /> Edit details</Button>}<Button variant="secondary" onClick={onShare}><Copy size={15} /> Copy link</Button><Button onClick={() => window.print()}><Printer size={15} /> Export PDF</Button></>}</div>
+    </div>
+    {exercise && <div className="exercise-print-content">
+      <Card className="exercise-detail-card">
+        <div className="exercise-detail-meta"><Badge>{exercise.ageGroup}</Badge><Badge tone="green">{exercise.complexity}</Badge><span>{exercise.category}</span></div>
+        <h2 data-no-translate>{exercise.title}</h2>
+        <p className="exercise-detail-description" data-no-translate>{exercise.description || "A club drill, ready to take to the court."}</p>
+        {exercise.tags.length > 0 && <div className="exercise-tags">{exercise.tags.map((tag) => <span key={tag} data-no-translate>#{tag}</span>)}</div>}
+      </Card>
+      <Card className="diagram-card exercise-diagram-card">
+        <div className="diagram-titlebar"><div><div className="diagram-eyebrow"><span className="green-pip" /> COURT SKETCH <span>·</span> SAVES WITH EXERCISE</div><h2>Exercise diagram</h2></div></div>
+        {!canEdit && <p className="read-only-note">You have view-only access to diagrams.</p>}
+        {error && <ErrorBanner message={error} onClose={() => setError("")} />}
+        <div className={!canEdit ? "diagram-readonly" : ""}><DiagramEditor key={exercise.id} value={exercise.diagramJson} onSave={async (value) => {
+          if (!canEdit) return;
+          setSaving(true);
+          setError("");
+          try {
+            await onSaveDiagram(value);
+          } catch (cause) {
+            setError(cause instanceof Error ? cause.message : "Diagram could not be saved.");
+          } finally {
+            setSaving(false);
+          }
+        }} /></div>
+        {saving && <div className="saving-indicator"><span className="status-dot" />Saving your diagram…</div>}
+        <div className="diagram-legend"><span><i className="legend-player" /> Player</span><span><i className="legend-gk" /> Goalkeeper</span><span><i className="legend-pass" /> Pass</span><span><i className="legend-move" /> Movement</span></div>
+      </Card>
+    </div>}
+    {exercise && <p className="training-sharing-note">This link is for signed-in members with access to this club. It won’t make the exercise public.</p>}
+  </div>);
 }
 
 function TrainingDetailPage({ plan, data, exerciseById, canEdit, saving, startEditing, onBack, onShare, onSave }: { plan?: TrainingPlan; data: Bootstrap; exerciseById: Map<string, Exercise>; canEdit: boolean; saving: boolean; startEditing: boolean; onBack: () => void; onShare: () => void; onSave: (value: Omit<TrainingPlan, "id" | "clubId">) => Promise<boolean> }) {
@@ -615,17 +695,6 @@ function ScheduleTemplateForm({ template, teams, saving, onClose, onSave }: { te
     <div className="modal-actions"><Button type="button" variant="ghost" onClick={onClose}>Cancel</Button><Button type="submit" disabled={saving || !teams.length}>{saving ? "Saving…" : "Add to calendar"} <CalendarDays size={15} /></Button></div>
     {!teams.length && <p className="form-error">Ask a club admin to add a team before scheduling a session.</p>}
   </form></Modal>);
-}
-
-function DiagramPage({ exercises, selectedId, setSelectedId, canEdit, onNavigate, onSave }: { exercises: Exercise[]; selectedId: string; setSelectedId: (value: string) => void; canEdit: boolean; onNavigate: (page: Page) => void; onSave: (value: string) => Promise<void> }) {
-  const selected = exercises.find((item) => item.id === selectedId);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-  return localize(<div className="content-page diagram-page"><div className="page-intro"><div><span className="section-kicker">DRAW IT. SHOW IT. PLAY IT.</span><h1>Diagram editor</h1><p>Give a great idea a shape. Sketch a movement, drag your markers and save it to a drill.</p></div><div className="diagram-status"><span className="status-dot" />{selected ? "SAVING TO EXERCISE" : "PICK AN EXERCISE"}</div></div>
-    {!exercises.length ?     <Card><EmptyState icon={Activity} title="Add a drill to get started" text="Your court is ready when you are. Create an exercise and bring it to life here." action="Open exercise library" onClick={() => onNavigate("library")} /></Card> :
-      <Card className="diagram-card"><div className="diagram-titlebar"><div><div className="diagram-eyebrow"><span className="green-pip" /> COURT SKETCH <span>·</span> SAVES WITH EXERCISE</div><h2>Sketch a play</h2></div><Field label="EXERCISE"><Select value={selectedId} onChange={(event) => setSelectedId(event.target.value)}>{exercises.map((exercise) => <option key={exercise.id} value={exercise.id}>{exercise.title}</option>)}</Select></Field></div>{!canEdit && <p className="read-only-note">You have view-only access to diagrams.</p>}{error && <ErrorBanner message={error} onClose={() => setError("")} />}<div className={!canEdit ? "diagram-readonly" : ""}><DiagramEditor key={selected?.id || "none"} value={selected?.diagramJson || "[]"} onSave={async (value) => { if (!canEdit) return; setSaving(true); setError(""); try { await onSave(value); } catch (cause) { setError(cause instanceof Error ? cause.message : "Diagram could not be saved."); } finally { setSaving(false); } }} /></div>{saving && <div className="saving-indicator"><span className="status-dot" />Saving your diagram…</div>}<div className="diagram-legend"><span><i className="legend-player" /> Player</span><span><i className="legend-gk" /> Goalkeeper</span><span><i className="legend-pass" /> Pass</span><span><i className="legend-move" /> Movement</span><span className="legend-hint">A clear picture makes a better play.</span></div></Card>}
-    <div className="diagram-tip"><Sparkles size={16} /><p><strong>Keep it simple.</strong> A few well-placed markers make a play easier to understand.</p></div>
-  </div>);
 }
 
 function TeamForm({ team, saving, onClose, onSave }: { team: Bootstrap["teams"][number]; saving: boolean; onClose: () => void; onSave: (value: { name: string; ageGroup: string }) => Promise<boolean> }) {
