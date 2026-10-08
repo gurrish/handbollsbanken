@@ -165,8 +165,13 @@ export default function App() {
   if (loading) return localize(<div className="app-loading"><div className="loading-mark">H</div><span>Getting your court ready…</span></div>);
   if (!import.meta.env.DEV && !signedIn) {
     return <SignInPage onLogin={(provider) => {
-      const returnTo = encodeURIComponent(window.location.href);
-      window.location.href = `/.auth/login/${provider}?post_login_redirect_uri=${returnTo}`;
+      const returnUrl = new URL(window.location.href);
+      if (returnUrl.pathname.startsWith("/.auth/")) {
+        returnUrl.pathname = "/";
+        returnUrl.search = "";
+        returnUrl.hash = "";
+      }
+      window.location.href = `/.auth/login/${provider}?post_login_redirect_uri=${encodeURIComponent(returnUrl.toString())}`;
     }} />;
   }
   if (!data) return <ErrorScreen error={error} onRetry={() => { setLoading(true); void refresh(); }} />;
