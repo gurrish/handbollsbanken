@@ -575,9 +575,9 @@ function Overview({ data, onNavigate, onOpenTraining, onPlanOccurrence, canEdit 
       <div className="section-heading"><div><span className="section-kicker">NEXT 14 DAYS</span><h2>Sessions to plan</h2></div><span className="muted-small">{unplannedOccurrences.length} unplanned</span></div>
       {unplannedOccurrences.length ? <div className="scheduled-occurrences">{unplannedOccurrences.map(({ schedule, date }) => {
         const team = data.teams.find((item) => item.id === schedule.teamId);
-        return <Card className="scheduled-occurrence" key={`${schedule.id}-${date}`}>
+        return <Card className="scheduled-occurrence occurrence-needs-planning" key={`${schedule.id}-${date}`}>
           <div className="occurrence-date"><strong>{new Date(`${date}T12:00:00`).getDate()}</strong><span>{dateLabel(date, { month: "short" }, locale)} · {dateLabel(date, { weekday: "short" }, locale)}</span></div>
-          <div className="occurrence-main"><div className="occurrence-team"><strong data-no-translate={Boolean(team)}>{team?.name || "Team"}</strong><small>{schedule.startTime} · {schedule.duration} min</small></div><span className="occurrence-status">Needs activities</span></div>
+          <div className="occurrence-main"><div className="occurrence-team"><strong data-no-translate={Boolean(team)}>{team?.name || "Team"}</strong><small>{schedule.startTime} · {schedule.duration} min</small></div><span className="occurrence-status occurrence-attention">Needs planning</span></div>
           <div className="occurrence-actions">{canEdit ? <Button onClick={() => onPlanOccurrence(schedule, date)}>Plan session</Button> : <Button variant="secondary" onClick={() => onNavigate("planner")}>View planner</Button>}</div>
         </Card>;
       })}</div> : <Card className="template-empty"><p>No unplanned sessions in the next 14 days.</p></Card>}
