@@ -493,16 +493,20 @@ function Overview({ data, onNavigate, onOpenTraining, onPlanOccurrence, canEdit 
   const dateLocale = locale === "sv" ? "sv-SE" : "en-GB";
   const weekLabel = new Intl.DateTimeFormat(dateLocale, { day: "numeric", month: "short" }).formatRange(weekDays[0].date, weekDays[6].date);
   const todayKey = dateInputValue(today);
-  const ages = [...new Set(data.teams.map((team) => team.ageGroup))].sort();
-  const filteredTeams = data.teams.filter((team) => ageFilter === "All ages" || team.ageGroup === ageFilter);
+  const selectedTeamIds = data.user.interestedTeamIds ?? data.teams.map((team) => team.id);
+  const selectedTeams = data.teams.filter((team) => selectedTeamIds.includes(team.id));
+  const ages = [...new Set(selectedTeams.map((team) => team.ageGroup))].sort();
+  const filteredTeams = selectedTeams.filter((team) => ageFilter === "All ages" || team.ageGroup === ageFilter);
   const filteredPlans = data.plans.filter((plan) => {
     const team = data.teams.find((item) => item.id === plan.teamId);
-    return (ageFilter === "All ages" || team?.ageGroup === ageFilter)
+    return selectedTeamIds.includes(plan.teamId)
+      && (ageFilter === "All ages" || team?.ageGroup === ageFilter)
       && (teamFilter === "All teams" || plan.teamId === teamFilter);
   });
   const filteredSchedules = data.schedules.filter((schedule) => {
     const team = data.teams.find((item) => item.id === schedule.teamId);
-    return (ageFilter === "All ages" || team?.ageGroup === ageFilter)
+    return selectedTeamIds.includes(schedule.teamId)
+      && (ageFilter === "All ages" || team?.ageGroup === ageFilter)
       && (teamFilter === "All teams" || schedule.teamId === teamFilter);
   });
   const weekPlans = filteredPlans.filter((plan) => weekDays.some((day) => day.key === plan.date.slice(0, 10)));
