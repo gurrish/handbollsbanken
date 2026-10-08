@@ -36,6 +36,7 @@ const translations: Record<string, string> = {
   "Choose a template…": "Välj en träningsmall…",
   "Plan this session": "Planera träningen",
   "Needs activities": "Aktiviteter saknas",
+  "Needs planning": "Behöver planeras",
   "Planned": "Planerad",
   "Skipped": "Överhoppad",
   "Edit plan": "Redigera plan",
