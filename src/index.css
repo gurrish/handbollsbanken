@@ -119,14 +119,17 @@ select.field { padding-right: 25px; cursor: pointer; }
 .weekly-schedule-section { display: flex; flex-direction: column; gap: 10px; }
 .scheduled-occurrences { display: flex; flex-direction: column; gap: 7px; }
 .scheduled-occurrence { display: grid; grid-template-columns: 100px minmax(0,1fr) auto; align-items: center; gap: 12px; padding: 11px 13px; }
+.occurrence-planned { background: #f7f8fd; border-color: #e2e7f4; }
+.occurrence-clickable { cursor: pointer; transition: background .15s, border-color .15s, box-shadow .15s; }
+.occurrence-clickable:hover { background: #f0f3fc; border-color: #d5ddef; box-shadow: 0 3px 10px rgba(33,49,83,.06); }
+.occurrence-clickable:focus-visible { outline: 2px solid #526dcb; outline-offset: 2px; }
 .occurrence-main { min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .occurrence-date { display: flex; align-items: center; gap: 8px; color: #758198; font-size: 9px; }
 .occurrence-date strong { display: grid; width: 32px; height: 32px; place-items: center; border-radius: 8px; background: #f1f4fc; color: #526bbd; font-size: 14px; }
 .occurrence-team, .occurrence-plan-link { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
 .occurrence-team strong, .occurrence-plan-link strong { max-width: 100%; overflow: hidden; color: #465169; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .occurrence-team small, .occurrence-plan-link small { color: #929bad; font-size: 8px; }
-.occurrence-plan-link { padding: 0; border: 0; background: transparent; text-align: left; cursor: pointer; }
-.occurrence-plan-link:hover strong { color: #526dcb; text-decoration: underline; }
+.occurrence-plan-link { padding: 0; text-align: left; }
 .occurrence-status { color: #9b8a62; font-size: 9px; }
 .occurrence-skipped { opacity: .65; }
 .occurrence-actions { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }

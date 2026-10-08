@@ -771,11 +771,28 @@ function PlannerPage({ data, exerciseById, canEdit, saving, onTeamsChange, onCre
       <div className="section-heading"><div><span className="section-kicker">RECURRING TEAM SESSIONS</span><h2>Weekly schedule</h2></div></div>
       {selectedSchedules.length ? <div className="scheduled-occurrences">{occurrences.map(({ schedule, date, plan, skipped }) => {
         const team = data.teams.find((item) => item.id === schedule.teamId);
-        return <Card className={`scheduled-occurrence ${skipped ? "occurrence-skipped" : ""}`} key={`${schedule.id}-${date}`}>
+        return <section
+          className={`card scheduled-occurrence ${skipped ? "occurrence-skipped" : ""} ${plan ? "occurrence-planned occurrence-clickable" : ""}`}
+          key={`${schedule.id}-${date}`}
+          role={plan ? "link" : undefined}
+          tabIndex={plan ? 0 : undefined}
+          aria-label={plan ? `Open ${plan.title}` : undefined}
+          onClick={plan ? (event) => {
+            if ((event.target as HTMLElement).closest("button, a, input, select, textarea")) return;
+            onOpen(plan.id);
+          } : undefined}
+          onKeyDown={plan ? (event) => {
+            if (event.target !== event.currentTarget) return;
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              onOpen(plan.id);
+            }
+          } : undefined}
+        >
           <div className="occurrence-date"><strong>{new Date(`${date}T12:00:00`).getDate()}</strong><span>{dateLabel(date, { month: "short" })} · {dateLabel(date, { weekday: "short" })}</span></div>
-          <div className="occurrence-main"><div className="occurrence-team"><strong data-no-translate={Boolean(team)}>{team?.name || "Team"}</strong><small>{schedule.startTime} · {schedule.duration} min</small></div>{skipped ? <span className="occurrence-status">Skipped</span> : plan ? <button type="button" className="occurrence-plan-link" onClick={() => onOpen(plan.id)}><strong data-no-translate>{plan.title}</strong><small>Planned</small></button> : <span className="occurrence-status">Needs activities</span>}</div>
+          <div className="occurrence-main"><div className="occurrence-team"><strong data-no-translate={Boolean(team)}>{team?.name || "Team"}</strong><small>{schedule.startTime} · {schedule.duration} min</small></div>{skipped ? <span className="occurrence-status">Skipped</span> : plan ? <div className="occurrence-plan-link"><strong data-no-translate>{plan.title}</strong><small>Planned</small></div> : <span className="occurrence-status">Needs activities</span>}</div>
           <div className="occurrence-actions">{skipped ? canEdit && <Button variant="secondary" onClick={() => onSkipOccurrence(schedule, date, false)}>Restore</Button> : <>{plan ? canEdit && <Button variant="secondary" onClick={() => onEdit(plan)}>Edit plan</Button> : canEdit && <Button variant="secondary" onClick={() => onPlanOccurrence(schedule, date)}>Plan</Button>}{!plan && canEdit && <Button variant="ghost" onClick={() => onSkipOccurrence(schedule, date, true)}>Skip</Button>}</>}</div>
-        </Card>;
+        </section>;
       })}</div> : <Card className="template-empty"><p>{selectedTeamIds.length ? "Define a weekly team schedule to start planning recurring sessions." : "Select teams above to see their weekly schedules."}</p>{canEdit && selectedTeamIds.length > 0 && <Button variant="secondary" onClick={onCreateSchedule}><Plus size={15} /> Define weekly schedule</Button>}</Card>}
       {selectedSchedules.map((schedule) => <div className="schedule-management-row" key={schedule.id}><span>{data.teams.find((team) => team.id === schedule.teamId)?.name} · {new Intl.DateTimeFormat(locale === "sv" ? "sv-SE" : "en-GB", { weekday: "short" }).format(new Date(Date.UTC(2024, 0, 7 + schedule.weekday)))} {schedule.startTime} · {schedule.duration} min</span>{canEdit && <span><button type="button" className="text-action" onClick={() => onEditSchedule(schedule)}>Edit schedule</button><button type="button" className="text-action" onClick={() => onDeleteSchedule(schedule)}>Delete schedule</button></span>}</div>)}
     </section>
