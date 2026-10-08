@@ -76,6 +76,7 @@ export interface TrainingTemplate {
   id: string;
   clubId: string;
   title: string;
+  ageGroup: string;
   duration: number;
   exerciseIds: string[];
   customExercises?: CustomExercise[];
@@ -138,7 +139,10 @@ export const planInput = z.object({
   }, "Date must be a valid calendar date."),
   ...trainingContentFields,
 }).superRefine(validateTrainingContent);
-export const templateInput = z.object(trainingContentFields).superRefine(validateTrainingContent);
+export const templateInput = z.object({
+  ageGroup: z.string().trim().min(1).max(40),
+  ...trainingContentFields,
+}).superRefine(validateTrainingContent);
 export const teamInput = z.object({
   name: z.string().trim().min(2).max(80),
   ageGroup: z.string().trim().min(1).max(40),

@@ -365,11 +365,11 @@ export default function App() {
       {planModal !== false && <PlanForm plan={planModal || undefined} teams={data.teams} exercises={data.exercises} saving={saving} onClose={() => setPlanModal(false)} onSave={async (value) => {
         if ("teamId" in value && "date" in value && await act(() => savePlan(value, planModal?.id), planModal ? "Session updated." : "Training session saved.")) setPlanModal(false);
       }} />}
-      {templateModal !== false && <PlanForm mode="template" template={templateModal || undefined} exercises={data.exercises} saving={saving} onClose={() => setTemplateModal(false)} onSave={async (value) => {
+      {templateModal !== false && <PlanForm mode="template" template={templateModal || undefined} teams={data.teams} exercises={data.exercises} saving={saving} onClose={() => setTemplateModal(false)} onSave={async (value) => {
         if (!("teamId" in value) && await act(() => saveTemplate(value, templateModal?.id), templateModal ? "Template updated." : "Template created.")) setTemplateModal(false);
       }} />}
       {scheduleTemplate && <ScheduleTemplateForm template={scheduleTemplate} teams={data.teams} saving={saving} onClose={() => setScheduleTemplate(false)} onSave={async ({ teamId, date }) => {
-        const { id: _id, clubId: _clubId, ...content } = scheduleTemplate;
+        const { id: _id, clubId: _clubId, ageGroup: _ageGroup, ...content } = scheduleTemplate;
         if (await act(() => savePlan({ ...content, teamId, date }), "Training session saved.")) setScheduleTemplate(false);
       }} />}
       {teamModal !== false && <TeamForm team={teamModal} saving={saving} onClose={() => setTeamModal(false)} onSave={async (value) => {
@@ -477,7 +477,7 @@ function LibraryPage(props: {
   </div>);
 }
 function ExerciseCard({ exercise, canEdit, onOpen, onEdit, onDelete }: { exercise: Exercise; canEdit: boolean; onOpen: () => void; onEdit: () => void; onDelete: () => void }) {
-  return localize(<Card className="exercise-card"><div className="exercise-card-body"><div className="exercise-meta"><Badge>{exercise.ageGroup}</Badge><span className={`complexity-dot complexity-${exercise.complexity.toLowerCase()}`} /> <span>{exercise.complexity}</span><span className="exercise-category">{exercise.category}</span></div><h3 data-no-translate>{exercise.title}</h3><p data-no-translate={Boolean(exercise.description)}>{exercise.description || "A club drill, ready to take to the court."}</p><div className="exercise-tags">{exercise.tags.slice(0, 3).map((tag) => <span key={tag} data-no-translate>#{tag}</span>)}</div><div className="exercise-card-foot"><button onClick={onOpen} className="exercise-open">View exercise <ArrowUpRight size={15} /></button>{canEdit && <div className="exercise-actions"><button onClick={onEdit}>Edit</button><button onClick={onDelete}>Delete</button></div>}</div></div></Card>);
+  return localize(<Card className="exercise-card"><div className="exercise-card-body"><div className="exercise-meta"><Badge>{exercise.ageGroup}</Badge><span className={`complexity-dot complexity-${exercise.complexity.toLowerCase()}`} /> <span>{exercise.complexity}</span><span className="exercise-category">{exercise.category}</span></div><h3 data-no-translate>{exercise.title}</h3><p data-no-translate={Boolean(exercise.description)}>{exercise.description || "A club drill, ready to take to the court."}</p><div className="exercise-tags">{exercise.tags.slice(0, 3).map((tag) => <span key={tag} data-no-translate>#{tag}</span>)}</div><div className="exercise-card-foot card-actions"><Button onClick={onOpen} variant="secondary" className="exercise-open">View exercise <ArrowUpRight size={15} /></Button>{canEdit && <div className="exercise-actions"><Button variant="ghost" onClick={onEdit}>Edit</Button><Button variant="ghost" onClick={onDelete}>Delete</Button></div>}</div></div></Card>);
 }
 
 function ExerciseForm({ exercise, canEdit, saving, onClose, onSave }: { exercise?: Exercise; canEdit: boolean; saving: boolean; onClose: () => void; onSave: (data: Omit<Exercise, "id" | "clubId" | "createdBy">) => Promise<void> }) {
@@ -558,7 +558,7 @@ function TrainingDetailPage({ plan, template, data, exerciseById, canEdit, savin
       }} />
       : <div className="training-print-content">
         <Card className="training-detail-card">
-          <div className="training-detail-meta">{plan && <><Badge>{team?.ageGroup || "Team"}</Badge><span data-no-translate={Boolean(team)}>{team?.name || "Team"}</span><span><CalendarDays size={14} />{dateLabel(plan.date, undefined, locale)}</span></>}{template && <Badge>Training template</Badge>}<span><Clock3 size={14} />{training.duration} min</span></div>
+          <div className="training-detail-meta">{plan && <><Badge>{team?.ageGroup || "Team"}</Badge><span data-no-translate={Boolean(team)}>{team?.name || "Team"}</span><span><CalendarDays size={14} />{dateLabel(plan.date, undefined, locale)}</span></>}{template && <Badge tone={template.ageGroup ? "blue" : "amber"}>{template.ageGroup || "Age group needed"}</Badge>}<span><Clock3 size={14} />{training.duration} min</span></div>
           <PlanTimeline plan={training} exerciseById={exerciseById} />
           {training.notes && <div className="training-coach-notes"><span className="section-kicker">COACH’S NOTES</span><p data-no-translate>{training.notes}</p></div>}
         </Card>
@@ -579,6 +579,12 @@ function PlannerPage({ data, exerciseById, canEdit, saving, onTeamsChange, onCre
   const sorted = [...data.plans]
     .filter((plan) => selectedTeamIds.includes(plan.teamId))
     .sort((a, b) => a.date.localeCompare(b.date));
+  const selectedAgeGroups = new Set(data.teams.filter((team) => selectedTeamIds.includes(team.id)).map((team) => team.ageGroup));
+  const visibleTemplates = data.templates.filter((template) => {
+    if (!template.ageGroup) return canEdit;
+    const ageGroup = template.ageGroup;
+    return ageGroup === "All ages" || selectedAgeGroups.has(ageGroup);
+  });
   return localize(<div className="content-page">
     <div className="page-intro"><div><span className="section-kicker">MAKE TIME FOR THE GOOD STUFF</span><h1>Training planner</h1><p>Build a practice that flows — from first whistle to final stretch.</p></div>{canEdit && <div className="planner-actions"><Button variant="secondary" onClick={onCreateTemplate}><Plus size={16} /> Create training template</Button><Button onClick={onCreate}><Plus size={16} /> Plan a session</Button></div>}</div>
     <Card className="team-filter">
@@ -586,7 +592,7 @@ function PlannerPage({ data, exerciseById, canEdit, saving, onTeamsChange, onCre
       <div className="team-filter-options">{data.teams.map((team) => <label key={team.id}><input type="checkbox" checked={selectedTeamIds.includes(team.id)} onChange={(event) => setSelectedTeamIds((current) => event.target.checked ? [...current, team.id] : current.filter((id) => id !== team.id))} /><span data-no-translate>{team.name}</span><small>{team.ageGroup}</small></label>)}</div>
       <Button variant="secondary" disabled={saving || !data.teams.length || (data.user.interestedTeamIds ?? data.teams.map((team) => team.id)).join("|") === selectedTeamIds.join("|")} onClick={() => void onTeamsChange(selectedTeamIds)}>{saving ? "Saving…" : "Save team selection"}</Button>
     </Card>
-    {data.templates.length > 0 && <section className="template-section"><div className="section-heading"><div><span className="section-kicker">READY-TO-USE PRACTICES</span><h2>Training templates</h2></div></div><div className="template-list">{data.templates.map((template) => <TemplateCard key={template.id} template={template} exerciseById={exerciseById} canEdit={canEdit} onOpen={() => onOpenTemplate(template.id)} onSchedule={() => onSchedule(template)} onEdit={() => onEditTemplate(template)} onDelete={() => onDeleteTemplate(template)} />)}</div></section>}
+    {data.templates.length > 0 && <section className="template-section"><div className="section-heading"><div><span className="section-kicker">READY-TO-USE PRACTICES</span><h2>Training templates</h2></div><span className="muted-small">For selected teams</span></div>{visibleTemplates.length ? <div className="template-list">{visibleTemplates.map((template) => <TemplateCard key={template.id} template={template} exerciseById={exerciseById} canEdit={canEdit} onOpen={() => onOpenTemplate(template.id)} onSchedule={() => onSchedule(template)} onEdit={() => onEditTemplate(template)} onDelete={() => onDeleteTemplate(template)} />)}</div> : <Card className="template-empty"><p>No training templates match the selected teams’ age groups.</p></Card>}</section>}
     <div className="planner-summary"><div><div className="summary-icon"><CalendarDays size={18} /></div><span><strong>{sorted.length} sessions</strong><small>for selected teams</small></span></div><div><div className="summary-icon green-summary"><Clock3 size={18} /></div><span><strong>{sorted.reduce((total, plan) => total + plan.duration, 0)} min</strong><small>court time scheduled</small></span></div><div><div className="summary-icon peach-summary"><Users size={18} /></div><span><strong>{selectedTeamIds.length} teams</strong><small>selected</small></span></div></div>
     {sorted.length ? <div className="plan-list">{sorted.map((plan, index) => <PlanCard key={plan.id} plan={plan} data={data} exerciseById={exerciseById} canEdit={canEdit} index={index} onEdit={() => onEdit(plan)} onOpen={() => onOpen(plan.id)} onShare={() => onShare(plan.id)} onDelete={() => onDelete(plan)} />)}</div> : <Card><EmptyState icon={CalendarDays} title={selectedTeamIds.length ? "No sessions on the calendar" : "No teams selected"} text={selectedTeamIds.length ? "Put together a practice and make the most of your court time." : "Select one or more teams above to see their planned trainings."} action={selectedTeamIds.length ? "Plan your first session" : "Choose teams"} onClick={selectedTeamIds.length ? onCreate : () => document.querySelector(".team-filter")?.scrollIntoView({ behavior: "smooth", block: "center" })} /></Card>}
   </div>);
@@ -594,10 +600,10 @@ function PlannerPage({ data, exerciseById, canEdit, saving, onTeamsChange, onCre
 function PlanCard({ plan, data, exerciseById, canEdit, index, onEdit, onOpen, onShare, onDelete }: { plan: TrainingPlan; data: Bootstrap; exerciseById: Map<string, Exercise>; canEdit: boolean; index: number; onEdit: () => void; onOpen: () => void; onShare: () => void; onDelete: () => void }) {
   const { locale } = useLocale();
   const team = data.teams.find((item) => item.id === plan.teamId);
-  return localize(<Card className="plan-card"><div className="plan-date"><span>{dateLabel(plan.date, { month: "short" }, locale).toUpperCase()}</span><strong>{new Date(`${plan.date.slice(0, 10)}T12:00:00`).getDate()}</strong><small>{dateLabel(plan.date, { weekday: "short" }, locale)}</small></div><div className="plan-main"><div className="plan-heading"><div><div className="plan-teamline"><Badge tone={index % 2 ? "green" : "blue"}>{team?.ageGroup || "Team"}</Badge><span data-no-translate={Boolean(team)}>{team?.name || "Team"}</span></div><h3 data-no-translate>{plan.title}</h3></div><span className="plan-time"><Clock3 size={14} />{plan.duration} min</span></div><PlanTimeline plan={plan} exerciseById={exerciseById} />{plan.notes && <p className="plan-notes" data-no-translate>{plan.notes}</p>}</div><div className="plan-actions"><button onClick={onOpen}>Open</button><button onClick={onShare}><Share2 size={13} /> Share</button>{canEdit && <><button onClick={onEdit}>Edit</button><button onClick={onDelete}>Delete</button></>}</div></Card>);
+  return localize(<Card className="plan-card"><div className="plan-date"><span>{dateLabel(plan.date, { month: "short" }, locale).toUpperCase()}</span><strong>{new Date(`${plan.date.slice(0, 10)}T12:00:00`).getDate()}</strong><small>{dateLabel(plan.date, { weekday: "short" }, locale)}</small></div><div className="plan-main"><div className="plan-heading"><div><div className="plan-teamline"><Badge tone={index % 2 ? "green" : "blue"}>{team?.ageGroup || "Team"}</Badge><span data-no-translate={Boolean(team)}>{team?.name || "Team"}</span></div><h3 data-no-translate>{plan.title}</h3></div><span className="plan-time"><Clock3 size={14} />{plan.duration} min</span></div><PlanTimeline plan={plan} exerciseById={exerciseById} />{plan.notes && <p className="plan-notes" data-no-translate>{plan.notes}</p>}</div><div className="plan-actions card-actions"><Button variant="secondary" onClick={onOpen}>Open</Button><Button variant="secondary" onClick={onShare}><Share2 size={14} /> Share</Button>{canEdit && <><Button variant="ghost" onClick={onEdit}>Edit</Button><Button variant="ghost" onClick={onDelete}>Delete</Button></>}</div></Card>);
 }
 function TemplateCard({ template, exerciseById, canEdit, onOpen, onSchedule, onEdit, onDelete }: { template: TrainingTemplate; exerciseById: Map<string, Exercise>; canEdit: boolean; onOpen: () => void; onSchedule: () => void; onEdit: () => void; onDelete: () => void }) {
-  return localize(<Card className="template-card"><div className="template-card-heading"><strong data-no-translate>{template.title}</strong><Badge>{template.duration} min</Badge></div><PlanTimeline plan={template} exerciseById={exerciseById} /><div className="template-actions"><Button variant="secondary" onClick={onOpen}>Open</Button>{canEdit && <><Button onClick={onSchedule}><CalendarDays size={14} /> Add to calendar</Button><Button variant="ghost" onClick={onEdit}>Edit</Button><Button variant="ghost" onClick={onDelete}>Delete</Button></>}</div></Card>);
+  return localize(<Card className="template-card"><div className="template-card-heading"><strong data-no-translate>{template.title}</strong><div className="template-badges"><Badge tone={template.ageGroup ? "blue" : "amber"}>{template.ageGroup || "Age group needed"}</Badge><Badge tone="gray">{template.duration} min</Badge></div></div><PlanTimeline plan={template} exerciseById={exerciseById} /><div className="template-actions card-actions"><Button variant="secondary" onClick={onOpen}>Open</Button>{canEdit && <><Button onClick={onSchedule}><CalendarDays size={14} /> Add to calendar</Button><Button variant="ghost" onClick={onEdit}>Edit</Button><Button variant="ghost" onClick={onDelete}>Delete</Button></>}</div></Card>);
 }
 function PlanTimeline({ plan, exerciseById }: { plan: Pick<TrainingPlan, "exerciseIds" | "duration" | "exerciseDurations"> & { customExercises?: TrainingPlan["customExercises"] }; exerciseById: Map<string, Exercise> }) {
   let elapsed = 0;
@@ -634,6 +640,7 @@ type PlanFormValue = Omit<TrainingPlan, "id" | "clubId"> | Omit<TrainingTemplate
 function PlanForm({ mode = "plan", plan, template, teams = [], exercises, saving, inline = false, onClose, onSave }: { mode?: "plan" | "template"; plan?: TrainingPlan; template?: TrainingTemplate; teams?: Bootstrap["teams"]; exercises: Exercise[]; saving: boolean; inline?: boolean; onClose: () => void; onSave: (value: PlanFormValue) => Promise<void> }) {
   const source = plan || template;
   const [title, setTitle] = useState(source?.title || "");
+  const [ageGroup, setAgeGroup] = useState(template?.ageGroup || "");
   const [teamId, setTeamId] = useState(plan?.teamId || teams[0]?.id || "");
   const [date, setDate] = useState(plan?.date?.slice(0, 10) || new Date().toISOString().slice(0, 10));
   const [duration, setDuration] = useState(source?.duration || 90);
@@ -647,6 +654,7 @@ function PlanForm({ mode = "plan", plan, template, teams = [], exercises, saving
     const ids = source?.exerciseIds || [];
     return Object.fromEntries(ids.map((id, index) => [id, exerciseMinutes(source, id, index)]));
   });
+  const availableAgeGroups = [...new Set([...ageGroups.map(({ value }) => value), ...teams.map((team) => team.ageGroup), ...(template?.ageGroup ? [template.ageGroup] : [])])];
   const sessionDuration = exerciseIds.length
     ? exerciseIds.reduce((total, id) => total + (exerciseDurations[id] || 0), 0)
     : duration;
@@ -690,7 +698,7 @@ function PlanForm({ mode = "plan", plan, template, teams = [], exercises, saving
     event.preventDefault();
     const content = { title, duration: sessionDuration, exerciseIds, customExercises, exerciseDurations: exerciseIds.length ? exerciseDurations : undefined, notes };
     if (mode === "plan") void onSave({ ...content, teamId, date });
-    else void onSave(content);
+    else void onSave({ ...content, ageGroup });
   }}>
     <p className="modal-lead">{mode === "template" ? "Save a training template and schedule copies for any team and date." : "Build or adjust this session here, then save it to the calendar."}</p>
     <Field label="Session name"><Input required minLength={2} maxLength={100} autoFocus value={title} onChange={(event) => setTitle(event.target.value)} placeholder="e.g. Fast breaks & finishing" /></Field>
@@ -699,7 +707,7 @@ function PlanForm({ mode = "plan", plan, template, teams = [], exercises, saving
       <Field label="Date"><Input type="date" required value={date} onChange={(event) => setDate(event.target.value)} /></Field>
       <Field label="Total duration (minutes)"><Input type="number" min={15} max={300} step={5} required readOnly={exerciseIds.length > 0} value={sessionDuration} onChange={(event) => setDuration(Number(event.target.value))} /></Field>
     </div>}
-    {mode === "template" && <Field label="Total duration (minutes)"><Input type="number" min={15} max={300} step={5} required readOnly={exerciseIds.length > 0} value={sessionDuration} onChange={(event) => setDuration(Number(event.target.value))} /></Field>}
+    {mode === "template" && <><Field label="Age group"><Select required value={ageGroup} onChange={(event) => setAgeGroup(event.target.value)}><option value="">Choose an age group…</option>{availableAgeGroups.filter((value) => value !== "All ages").map((value) => <option key={value} value={value}>{ageGroups.find((item) => item.value === value)?.label || value}</option>)}<option>All ages</option></Select></Field><Field label="Total duration (minutes)"><Input type="number" min={15} max={300} step={5} required readOnly={exerciseIds.length > 0} value={sessionDuration} onChange={(event) => setDuration(Number(event.target.value))} /></Field></>}
     <div className="form-field">
       <label className="field-label" htmlFor="plan-exercise-search">Add exercise from library</label>
       <Input id="plan-exercise-search" type="search" value={exerciseSearch} onChange={(event) => setExerciseSearch(event.target.value)} placeholder="Search exercises…" disabled={exerciseIds.length >= 50} />

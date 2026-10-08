@@ -21,7 +21,7 @@ export interface CustomExercise {
   id: string; title: string
 }
 export interface TrainingTemplate {
-  id: string; clubId: string; title: string; duration: number; exerciseIds: string[];
+  id: string; clubId: string; title: string; ageGroup: string; duration: number; exerciseIds: string[];
   customExercises?: CustomExercise[]; exerciseDurations?: Record<string, number>; notes: string
 }
 export interface Bootstrap {
