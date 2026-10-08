@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Activity, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, CalendarDays, Check, ChevronDown, CircleHelp,
-  Clock3, Copy, Dumbbell, Filter, LayoutDashboard, Library, LogOut, Menu, Printer,
+  ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, CalendarDays, Check, ChevronDown, CircleHelp,
+  Clock3, Copy, Filter, LayoutDashboard, Library, LogOut, Menu, Printer,
   Pencil, Plus, Search, Share2, Shield, Sparkles, Users, X,
 } from "lucide-react";
 import DiagramEditor from "./components/DiagramEditor";
@@ -164,20 +164,17 @@ export default function App() {
     setEditingTrainingId(edit ? id : null);
     setMobileOpen(false);
   };
-  const openScheduleOccurrence = (schedule: TrainingSchedule, date: string, template?: TrainingTemplate, existingPlan?: TrainingPlan) => {
+  const openScheduleOccurrence = (schedule: TrainingSchedule, date: string) => {
     const team = data?.teams.find((item) => item.id === schedule.teamId);
-    const exerciseDurations = template ? fitTemplateDurations(template, schedule.duration) : undefined;
     setPlanModal({
-      id: existingPlan?.id || "",
+      id: "",
       clubId: schedule.clubId,
       teamId: schedule.teamId,
-      title: template?.title || `${team?.name || "Team"} training`,
+      title: `${team?.name || "Team"} training`,
       date,
       duration: schedule.duration,
-      exerciseIds: template ? [...template.exerciseIds] : [],
-      customExercises: template?.customExercises?.map((exercise) => ({ ...exercise })),
-      exerciseDurations,
-      notes: template?.notes || "",
+      exerciseIds: [],
+      notes: "",
       scheduleId: schedule.id,
       startTime: schedule.startTime,
     });
@@ -382,7 +379,7 @@ export default function App() {
               await refresh();
               setMessage("Diagram saved to exercise.");
             }}
-          /> : !sharedTrainingId && !sharedTemplateId && !sharedExerciseId && page === "overview" && <Overview data={data} clubName={club?.name || "your club"} onNavigate={changePage} onOpenTraining={openTraining} onPlanOccurrence={openScheduleOccurrence} canEdit={canEdit} />}
+          /> : !sharedTrainingId && !sharedTemplateId && !sharedExerciseId && page === "overview" && <Overview data={data} onNavigate={changePage} onOpenTraining={openTraining} onPlanOccurrence={openScheduleOccurrence} canEdit={canEdit} />}
           {!sharedTrainingId && !sharedTemplateId && !sharedExerciseId && page === "library" && <LibraryPage
             exercises={filteredExercises} total={data.exercises.length} query={query} setQuery={setQuery}
             ageFilter={ageFilter} setAgeFilter={setAgeFilter} categoryFilter={categoryFilter} setCategoryFilter={setCategoryFilter}
@@ -407,7 +404,7 @@ export default function App() {
       {exerciseModal !== false && <ExerciseForm exercise={exerciseModal || undefined} canEdit={canEdit} saving={saving} onClose={() => setExerciseModal(false)} onSave={async (value) => {
         if (await act(() => saveExercise(value, exerciseModal?.id), exerciseModal ? "Exercise updated." : "Exercise added.")) setExerciseModal(false);
       }} />}
-      {planModal !== false && <PlanForm plan={planModal || undefined} teams={data.teams} exercises={data.exercises} saving={saving} onClose={() => setPlanModal(false)} onSave={async (value) => {
+      {planModal !== false && <PlanForm plan={planModal || undefined} teams={data.teams} exercises={data.exercises} templates={data.templates} saving={saving} onClose={() => setPlanModal(false)} onSave={async (value) => {
         if ("teamId" in value && "date" in value && await act(() => savePlan(value, planModal?.id), planModal?.id ? "Session updated." : "Training session saved.")) setPlanModal(false);
       }} />}
       {templateModal !== false && <PlanForm mode="template" template={templateModal || undefined} teams={data.teams} exercises={data.exercises} saving={saving} onClose={() => setTemplateModal(false)} onSave={async (value) => {
@@ -476,7 +473,7 @@ function ProfileEditor({ name, email, saving, onSave }: { name: string; email: s
   </>);
 }
 
-function Overview({ data, clubName, onNavigate, onOpenTraining, onPlanOccurrence, canEdit }: { data: Bootstrap; clubName: string; onNavigate: (page: Page) => void; onOpenTraining: (id: string) => void; onPlanOccurrence: (schedule: TrainingSchedule, date: string) => void; canEdit: boolean }) {
+function Overview({ data, onNavigate, onOpenTraining, onPlanOccurrence, canEdit }: { data: Bootstrap; onNavigate: (page: Page) => void; onOpenTraining: (id: string) => void; onPlanOccurrence: (schedule: TrainingSchedule, date: string) => void; canEdit: boolean }) {
   const { locale } = useLocale();
   const [weekOffset, setWeekOffset] = useState(0);
   const [showOlder, setShowOlder] = useState(false);
@@ -488,6 +485,8 @@ function Overview({ data, clubName, onNavigate, onOpenTraining, onPlanOccurrence
     const date = new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + index);
     return { date, key: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}` };
   });
+  const next14Days = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 14);
+  const next14DaysKey = dateInputValue(next14Days);
   const dateLocale = locale === "sv" ? "sv-SE" : "en-GB";
   const weekLabel = new Intl.DateTimeFormat(dateLocale, { day: "numeric", month: "short" }).formatRange(weekDays[0].date, weekDays[6].date);
   const todayKey = dateInputValue(today);
@@ -509,6 +508,11 @@ function Overview({ data, clubName, onNavigate, onOpenTraining, onPlanOccurrence
   const weekOccurrences = filteredSchedules.flatMap((schedule) => scheduleDates(schedule)
     .filter((key) => weekDays.some((day) => day.key === key) && !schedule.skippedDates.includes(key))
     .map((date) => ({ schedule, date, plan: weekPlans.find((plan) => plan.scheduleId === schedule.id && plan.date.slice(0, 10) === date) })));
+  const unplannedOccurrences = filteredSchedules.flatMap((schedule) => scheduleDates(schedule)
+    .filter((date) => date >= todayKey && date < next14DaysKey && !schedule.skippedDates.includes(date))
+    .filter((date) => !filteredPlans.some((plan) => plan.scheduleId === schedule.id && plan.date.slice(0, 10) === date))
+    .map((date) => ({ schedule, date })))
+    .sort((a, b) => a.date.localeCompare(b.date) || a.schedule.startTime.localeCompare(b.schedule.startTime));
   const olderWeekOccurrences = weekOccurrences.filter(({ date }) => date < todayKey);
   const visibleWeekOccurrences = weekOccurrences.filter(({ date }) => showOlder || date >= todayKey);
   const olderSessionCount = olderWeekPlans.length + olderWeekOccurrences.filter(({ plan }) => !plan).length;
@@ -563,18 +567,19 @@ function Overview({ data, clubName, onNavigate, onOpenTraining, onPlanOccurrence
       </div>
       <div className="week-calendar-footer"><span>{visibleSessionCount} sessions this week</span><div className="week-calendar-footer-actions">{olderSessionCount > 0 && <button type="button" className="text-action" aria-expanded={showOlder} onClick={() => setShowOlder((current) => !current)}>{showOlder ? "Hide older" : "Show older"}{!showOlder && ` (${olderSessionCount})`}</button>}<button className="text-action" onClick={() => onNavigate("planner")}>View planner <ArrowUpRight size={14} /></button></div></div>
     </Card>
-    <div className="section-heading stats-heading"><div><span className="section-kicker">YOUR CLUB AT A GLANCE</span><h2>Practice, in good shape.</h2></div><span className="muted-small">A little progress every session</span></div>
-    <div className="stats-grid">
-      <StatCard icon={CalendarDays} tone="blue" value={data.plans.length.toString().padStart(2, "0")} label="Sessions planned" detail="Across your teams" />
-      <StatCard icon={Dumbbell} tone="green" value={data.exercises.length.toString().padStart(2, "0")} label="Exercises in library" detail="Ready for the court" />
-      <StatCard icon={Users} tone="peach" value={data.teams.length.toString().padStart(2, "0")} label="Active teams" detail={clubName} />
-      <StatCard icon={Activity} tone="violet" value={`${data.exercises.length ? Math.min(100, Math.round(data.exercises.length / 20 * 100)) : 0}%`} label="Library built" detail="Keep adding your favourites" />
-    </div>
+    <section className="upcoming-unplanned">
+      <div className="section-heading"><div><span className="section-kicker">NEXT 14 DAYS</span><h2>Sessions to plan</h2></div><span className="muted-small">{unplannedOccurrences.length} unplanned</span></div>
+      {unplannedOccurrences.length ? <div className="scheduled-occurrences">{unplannedOccurrences.map(({ schedule, date }) => {
+        const team = data.teams.find((item) => item.id === schedule.teamId);
+        return <Card className="scheduled-occurrence" key={`${schedule.id}-${date}`}>
+          <div className="occurrence-date"><strong>{new Date(`${date}T12:00:00`).getDate()}</strong><span>{dateLabel(date, { month: "short" }, locale)} · {dateLabel(date, { weekday: "short" }, locale)}</span></div>
+          <div className="occurrence-main"><div className="occurrence-team"><strong data-no-translate={Boolean(team)}>{team?.name || "Team"}</strong><small>{schedule.startTime} · {schedule.duration} min</small></div><span className="occurrence-status">Needs activities</span></div>
+          <div className="occurrence-actions">{canEdit ? <Button onClick={() => onPlanOccurrence(schedule, date)}>Plan session</Button> : <Button variant="secondary" onClick={() => onNavigate("planner")}>View planner</Button>}</div>
+        </Card>;
+      })}</div> : <Card className="template-empty"><p>No unplanned sessions in the next 14 days.</p></Card>}
+    </section>
     {pending > 0 && <button className="pending-banner" onClick={() => onNavigate("admin")}><div className="pending-badge">{pending}</div><span><strong>{pending > 1 ? "Coach requests to review" : "Coach request to review"}</strong><small>Your club is waiting on you</small></span><ArrowUpRight size={16} /></button>}
   </div>);
-}
-function StatCard({ icon: Icon, tone, value, label, detail }: { icon: typeof CalendarDays; tone: string; value: string; label: string; detail: string }) {
-  return localize(<Card className="stat-card"><div className={`stat-icon stat-${tone}`}><Icon size={18} /></div><strong className="stat-value">{value}</strong><span className="stat-label">{label}</span><span className="stat-detail">{detail}</span></Card>);
 }
 function EmptyState({ icon: Icon, title, text, action, onClick }: { icon: typeof CalendarDays; title: string; text: string; action: string; onClick: () => void }) {
   return localize(<div className="empty-state"><div className="empty-icon"><Icon size={21} /></div><h4>{title}</h4><p>{text}</p><Button variant="secondary" onClick={onClick}><Plus size={15} />{action}</Button></div>);
@@ -726,7 +731,7 @@ function fitTemplateDurations(template: TrainingTemplate, duration: number): Rec
   return Object.fromEntries(template.exerciseIds.map((id, index) => [id, fitted[index]]));
 }
 
-function PlannerPage({ data, exerciseById, canEdit, saving, onTeamsChange, onCreate, onCreateSchedule, onEditSchedule, onDeleteSchedule, onPlanOccurrence, onSkipOccurrence, onEdit, onOpen, onShare, onDelete }: { data: Bootstrap; exerciseById: Map<string, Exercise>; canEdit: boolean; saving: boolean; onTeamsChange: (teamIds: string[]) => Promise<boolean>; onCreate: () => void; onCreateSchedule: () => void; onEditSchedule: (schedule: TrainingSchedule) => void; onDeleteSchedule: (schedule: TrainingSchedule) => void; onPlanOccurrence: (schedule: TrainingSchedule, date: string, template?: TrainingTemplate, existingPlan?: TrainingPlan) => void; onSkipOccurrence: (schedule: TrainingSchedule, date: string, skip: boolean) => void; onEdit: (plan: TrainingPlan) => void; onOpen: (id: string) => void; onShare: (id: string) => void; onDelete: (plan: TrainingPlan) => void }) {
+function PlannerPage({ data, exerciseById, canEdit, saving, onTeamsChange, onCreate, onCreateSchedule, onEditSchedule, onDeleteSchedule, onPlanOccurrence, onSkipOccurrence, onEdit, onOpen, onShare, onDelete }: { data: Bootstrap; exerciseById: Map<string, Exercise>; canEdit: boolean; saving: boolean; onTeamsChange: (teamIds: string[]) => Promise<boolean>; onCreate: () => void; onCreateSchedule: () => void; onEditSchedule: (schedule: TrainingSchedule) => void; onDeleteSchedule: (schedule: TrainingSchedule) => void; onPlanOccurrence: (schedule: TrainingSchedule, date: string) => void; onSkipOccurrence: (schedule: TrainingSchedule, date: string, skip: boolean) => void; onEdit: (plan: TrainingPlan) => void; onOpen: (id: string) => void; onShare: (id: string) => void; onDelete: (plan: TrainingPlan) => void }) {
   const { locale } = useLocale();
   const [selectedTeamIds, setSelectedTeamIds] = useState<string[]>(() => data.user.interestedTeamIds ?? data.teams.map((team) => team.id));
   const [showOlder, setShowOlder] = useState(false);
@@ -763,12 +768,10 @@ function PlannerPage({ data, exerciseById, canEdit, saving, onTeamsChange, onCre
       <div className="section-heading"><div><span className="section-kicker">RECURRING TEAM SESSIONS</span><h2>Weekly schedule</h2></div></div>
       {selectedSchedules.length ? <div className="scheduled-occurrences">{occurrences.map(({ schedule, date, plan, skipped }) => {
         const team = data.teams.find((item) => item.id === schedule.teamId);
-        const templates = data.templates.filter((template) => template.exerciseIds.length > 0 && template.exerciseIds.length <= schedule.duration
-          && (!template.ageGroup || template.ageGroup === "All ages" || template.ageGroup === team?.ageGroup));
         return <Card className={`scheduled-occurrence ${skipped ? "occurrence-skipped" : ""}`} key={`${schedule.id}-${date}`}>
           <div className="occurrence-date"><strong>{new Date(`${date}T12:00:00`).getDate()}</strong><span>{dateLabel(date, { month: "short" })} · {dateLabel(date, { weekday: "short" })}</span></div>
           <div className="occurrence-main"><div className="occurrence-team"><strong data-no-translate={Boolean(team)}>{team?.name || "Team"}</strong><small>{schedule.startTime} · {schedule.duration} min</small></div>{skipped ? <span className="occurrence-status">Skipped</span> : plan ? <button type="button" className="occurrence-plan-link" onClick={() => onOpen(plan.id)}><strong data-no-translate>{plan.title}</strong><small>Planned</small></button> : <span className="occurrence-status">Needs activities</span>}</div>
-          <div className="occurrence-actions">{skipped ? canEdit && <Button variant="secondary" onClick={() => onSkipOccurrence(schedule, date, false)}>Restore</Button> : <>{plan ? canEdit && <Button variant="secondary" onClick={() => onEdit(plan)}>Edit plan</Button> : canEdit && <Button variant="secondary" onClick={() => onPlanOccurrence(schedule, date)}>Plan manually</Button>}{canEdit && templates.length > 0 && <label className="occurrence-template-picker"><span>Load from template</span><Select aria-label={`Load from template for ${team?.name || "team"} on ${date}`} value="" onChange={(event) => { const template = templates.find((item) => item.id === event.target.value); if (template) onPlanOccurrence(schedule, date, template, plan); }}><option value="">Choose template…</option>{templates.map((template) => <option key={template.id} value={template.id}>{template.title} · {template.duration} min</option>)}</Select></label>}{!plan && canEdit && <Button variant="ghost" onClick={() => onSkipOccurrence(schedule, date, true)}>Skip</Button>}</>}</div>
+          <div className="occurrence-actions">{skipped ? canEdit && <Button variant="secondary" onClick={() => onSkipOccurrence(schedule, date, false)}>Restore</Button> : <>{plan ? canEdit && <Button variant="secondary" onClick={() => onEdit(plan)}>Edit plan</Button> : canEdit && <Button variant="secondary" onClick={() => onPlanOccurrence(schedule, date)}>Plan</Button>}{!plan && canEdit && <Button variant="ghost" onClick={() => onSkipOccurrence(schedule, date, true)}>Skip</Button>}</>}</div>
         </Card>;
       })}</div> : <Card className="template-empty"><p>{selectedTeamIds.length ? "Define a weekly team schedule to start planning recurring sessions." : "Select teams above to see their weekly schedules."}</p>{canEdit && selectedTeamIds.length > 0 && <Button variant="secondary" onClick={onCreateSchedule}><Plus size={15} /> Define weekly schedule</Button>}</Card>}
       {selectedSchedules.map((schedule) => <div className="schedule-management-row" key={schedule.id}><span>{data.teams.find((team) => team.id === schedule.teamId)?.name} · {new Intl.DateTimeFormat(locale === "sv" ? "sv-SE" : "en-GB", { weekday: "short" }).format(new Date(Date.UTC(2024, 0, 7 + schedule.weekday)))} {schedule.startTime} · {schedule.duration} min</span>{canEdit && <span><button type="button" className="text-action" onClick={() => onEditSchedule(schedule)}>Edit schedule</button><button type="button" className="text-action" onClick={() => onDeleteSchedule(schedule)}>Delete schedule</button></span>}</div>)}
@@ -832,7 +835,7 @@ function hasDiagram(exercise: Exercise | undefined): exercise is Exercise {
   }
 }
 type PlanFormValue = Omit<TrainingPlan, "id" | "clubId"> | Omit<TrainingTemplate, "id" | "clubId">;
-function PlanForm({ mode = "plan", plan, template, teams = [], exercises, saving, inline = false, onClose, onSave }: { mode?: "plan" | "template"; plan?: TrainingPlan; template?: TrainingTemplate; teams?: Bootstrap["teams"]; exercises: Exercise[]; saving: boolean; inline?: boolean; onClose: () => void; onSave: (value: PlanFormValue) => Promise<void> }) {
+function PlanForm({ mode = "plan", plan, template, teams = [], exercises, templates = [], saving, inline = false, onClose, onSave }: { mode?: "plan" | "template"; plan?: TrainingPlan; template?: TrainingTemplate; teams?: Bootstrap["teams"]; exercises: Exercise[]; templates?: TrainingTemplate[]; saving: boolean; inline?: boolean; onClose: () => void; onSave: (value: PlanFormValue) => Promise<void> }) {
   const source = plan || template;
   const isExistingPlan = Boolean(plan?.id);
   const [title, setTitle] = useState(source?.title || "");
@@ -845,12 +848,18 @@ function PlanForm({ mode = "plan", plan, template, teams = [], exercises, saving
   const [customExercises, setCustomExercises] = useState(source?.customExercises || []);
   const [exerciseSearch, setExerciseSearch] = useState("");
   const [customTitle, setCustomTitle] = useState("");
+  const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [exerciseDurations, setExerciseDurations] = useState<Record<string, number>>(() => {
     if (source?.exerciseDurations) return source.exerciseDurations;
     const ids = source?.exerciseIds || [];
     return Object.fromEntries(ids.map((id, index) => [id, exerciseMinutes(source, id, index)]));
   });
   const availableAgeGroups = [...new Set([...ageGroups.map(({ value }) => value), ...teams.map((team) => team.ageGroup), ...(template?.ageGroup ? [template.ageGroup] : [])])];
+  const scheduledTeamAgeGroup = teams.find((team) => team.id === plan?.teamId)?.ageGroup;
+  const availableTemplates = templates.filter((item) => Boolean(plan?.scheduleId)
+    && item.exerciseIds.length > 0
+    && item.exerciseIds.length <= (plan?.duration || 0)
+    && (!item.ageGroup || item.ageGroup === "All ages" || item.ageGroup === scheduledTeamAgeGroup));
   const sessionDuration = exerciseIds.length
     ? exerciseIds.reduce((total, id) => total + (exerciseDurations[id] || 0), 0)
     : duration;
@@ -890,6 +899,16 @@ function PlanForm({ mode = "plan", plan, template, teams = [], exercises, saving
     setExerciseDurations((current) => ({ ...current, [id]: 15 }));
     setCustomTitle("");
   };
+  const loadTemplate = (id: string) => {
+    setSelectedTemplateId(id);
+    const selected = availableTemplates.find((item) => item.id === id);
+    if (!selected || !plan?.scheduleId) return;
+    setTitle(selected.title);
+    setNotes(selected.notes);
+    setExerciseIds([...selected.exerciseIds]);
+    setCustomExercises(selected.customExercises?.map((exercise) => ({ ...exercise })) || []);
+    setExerciseDurations(fitTemplateDurations(selected, plan.duration));
+  };
   const form = <form className={`modal-form ${inline ? "inline-plan-form" : ""}`} onSubmit={(event) => {
     event.preventDefault();
     const content = { title, duration: sessionDuration, exerciseIds, customExercises, exerciseDurations: exerciseIds.length ? exerciseDurations : undefined, notes };
@@ -897,6 +916,7 @@ function PlanForm({ mode = "plan", plan, template, teams = [], exercises, saving
     else void onSave({ ...content, ageGroup });
   }}>
     <p className="modal-lead">{mode === "template" ? "Save a training template and schedule copies for any team and date." : "Build or adjust this session here, then save it to the calendar."}</p>
+    {mode === "plan" && plan?.scheduleId && <Field label="Template"><Select value={selectedTemplateId} onChange={(event) => loadTemplate(event.target.value)}><option value="">{availableTemplates.length ? "Choose a template…" : "No matching templates"}</option>{availableTemplates.map((item) => <option key={item.id} value={item.id}>{item.title} · {item.duration} min</option>)}</Select></Field>}
     <Field label="Session name"><Input required minLength={2} maxLength={100} autoFocus value={title} onChange={(event) => setTitle(event.target.value)} placeholder="e.g. Fast breaks & finishing" /></Field>
     {mode === "plan" && <div className="form-row">
       <Field label="Team"><Select required disabled={Boolean(plan?.scheduleId)} value={teamId} onChange={(event) => setTeamId(event.target.value)}><option value="">Choose team…</option>{teams.map((team) => <option key={team.id} value={team.id}>{team.name} · {team.ageGroup}</option>)}</Select></Field>

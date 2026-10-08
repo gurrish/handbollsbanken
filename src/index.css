@@ -130,9 +130,8 @@ select.field { padding-right: 25px; cursor: pointer; }
 .occurrence-status { color: #9b8a62; font-size: 9px; }
 .occurrence-skipped { opacity: .65; }
 .occurrence-actions { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
-.occurrence-template-picker { display: flex; flex-direction: column; gap: 3px; color: #7f8aa0; font-size: 8px; font-weight: 700; white-space: nowrap; }
 .occurrence-actions .button { min-height: 30px; padding: 0 8px; font-size: 9px; white-space: nowrap; }
-.occurrence-actions .field { width: auto; max-width: 190px; min-height: 30px; padding: 0 22px 0 7px; font-size: 9px; }
+.occurrence-actions .field { width: auto; max-width: 170px; min-height: 30px; padding: 0 22px 0 7px; font-size: 9px; }
 .schedule-management-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 2px; border-bottom: 1px solid #edf0f5; color: #8b95a7; font-size: 9px; }
 .schedule-management-row > span:last-child { display: flex; gap: 12px; }
 .week-session-unplanned { border-left-color: #d9a064; background: #fff7ee; }
@@ -141,7 +140,6 @@ select.field { padding-right: 25px; cursor: pointer; }
   .scheduled-occurrence { grid-template-columns: 1fr; gap: 9px; }
   .occurrence-main { align-items: flex-start; flex-direction: column; gap: 8px; }
   .occurrence-actions { flex-wrap: wrap; justify-content: flex-start; }
-  .occurrence-template-picker { flex: 1 1 160px; }
   .occurrence-actions .field { flex: 1 1 160px; max-width: none; }
   .schedule-management-row { align-items: flex-start; flex-direction: column; }
 }
