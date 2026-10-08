@@ -18,6 +18,13 @@ const tools = [
   { type: "text", label: "Text", icon: Type },
 ] as const;
 const colors = { player: "#3158d6", keeper: "#ed9c35", cone: "#e5764d", goal: "#34415c", ball: "#d5aa35", pass: "#32a57b", movement: "#8058cc", arrow: "#68748d", text: "#293550" };
+const playerPalette = [
+  { color: "#3158d6", label: "Blue player" },
+  { color: "#d94f4f", label: "Red player" },
+  { color: "#ed9c35", label: "Orange player" },
+  { color: "#32a57b", label: "Green player" },
+  { color: "#8058cc", label: "Purple player" },
+] as const;
 const initialItems: DiagramItem[] = [
   { id: "p1", type: "player", x: 140, y: 115, width: 18, height: 18 },
   { id: "p2", type: "player", x: 245, y: 215, width: 18, height: 18 },
@@ -99,7 +106,19 @@ export default function DiagramEditor({ value, onSave, readOnly = false }: { val
           <Button variant="ghost" onClick={() => { setItems([]); setSelectedId(null); }}><RotateCcw size={15} /> Clear</Button>
           {selectedId && <Button variant="ghost" onClick={() => updateItem(selectedId, { rotation: ((selectedItem?.rotation || 0) + 15) % 360 })}><RotateCw size={15} /> Rotate 15°</Button>}
           {selectedId && <Button variant="ghost" onClick={() => { setItems((current) => current.filter((item) => item.id !== selectedId)); setSelectedId(null); }}><Trash2 size={15} /> Delete</Button>}
-          {selectedItem?.type === "player" && <label className="player-color-picker">Player color<input type="color" aria-label="Player color" value={selectedItem.color || colors.player} onChange={(event) => updateItem(selectedItem.id, { color: event.target.value })} /></label>}
+          {selectedItem?.type === "player" && <div className="player-color-picker" role="group" aria-label="Player color">
+            <span>Player color</span>
+            {playerPalette.map(({ color, label }) => <button
+              key={color}
+              type="button"
+              className={`player-color-swatch ${color === (selectedItem.color || colors.player) ? "selected" : ""}`}
+              style={{ backgroundColor: color }}
+              aria-label={label}
+              aria-pressed={color === (selectedItem.color || colors.player)}
+              title={label}
+              onClick={() => updateItem(selectedItem.id, { color })}
+            />)}
+          </div>}
           {onSave && <Button onClick={() => void save()}><Save size={15} /> {saved ? "Saved!" : "Save diagram"}</Button>}
         </div>
       </div>}

@@ -5,6 +5,12 @@ export type Locale = "sv" | "en";
 
 const translations: Record<string, string> = {
   "Overview": "Översikt",
+  "Player color": "Spelarfärg",
+  "Blue player": "Blå spelare",
+  "Red player": "Röd spelare",
+  "Orange player": "Orange spelare",
+  "Green player": "Grön spelare",
+  "Purple player": "Lila spelare",
   "Schedule training from template": "Schemalägg träning från mall",
   "First session": "Första träningen",
   "Repeats": "Upprepas",
@@ -166,6 +172,9 @@ const translations: Record<string, string> = {
   "UP NEXT": "HÄRNÄST",
   "Your upcoming sessions": "Kommande träningspass",
   "View planner": "Visa planeringen",
+  "Show older": "Visa äldre träningar",
+  "Hide older": "Dölj äldre träningar",
+  "There are no upcoming sessions for the selected teams.": "Det finns inga kommande träningar för de valda lagen.",
   "Your court is open": "Planen väntar på er",
   "Create your first session and get the team moving.": "Skapa ert första träningspass och få laget i rörelse.",
   "QUICK START": "SNABBSTART",

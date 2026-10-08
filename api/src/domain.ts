@@ -13,6 +13,7 @@ const diagramItems = z.array(z.object({
   height: z.number().finite().positive().max(10000),
   rotation: z.number().finite().min(-3600).max(3600).optional(),
   text: z.string().max(200).optional(),
+  color: z.enum(["#3158d6", "#d94f4f", "#ed9c35", "#32a57b", "#8058cc"]).optional(),
 }).strict()).max(200);
 
 export interface Club {

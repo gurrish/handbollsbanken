@@ -359,7 +359,7 @@ export default function App() {
               await refresh();
               setMessage("Diagram saved to exercise.");
             }}
-          /> : !sharedTrainingId && !sharedTemplateId && !sharedExerciseId && page === "overview" && <Overview data={data} clubName={club?.name || "your club"} onNavigate={changePage} />}
+          /> : !sharedTrainingId && !sharedTemplateId && !sharedExerciseId && page === "overview" && <Overview data={data} clubName={club?.name || "your club"} onNavigate={changePage} onOpenTraining={openTraining} />}
           {!sharedTrainingId && !sharedTemplateId && !sharedExerciseId && page === "library" && <LibraryPage
             exercises={filteredExercises} total={data.exercises.length} query={query} setQuery={setQuery}
             ageFilter={ageFilter} setAgeFilter={setAgeFilter} categoryFilter={categoryFilter} setCategoryFilter={setCategoryFilter}
@@ -439,9 +439,10 @@ function ProfileEditor({ name, email, saving, onSave }: { name: string; email: s
   </>);
 }
 
-function Overview({ data, clubName, onNavigate }: { data: Bootstrap; clubName: string; onNavigate: (page: Page) => void }) {
+function Overview({ data, clubName, onNavigate, onOpenTraining }: { data: Bootstrap; clubName: string; onNavigate: (page: Page) => void; onOpenTraining: (id: string) => void }) {
   const { locale } = useLocale();
   const [weekOffset, setWeekOffset] = useState(0);
+  const [showOlder, setShowOlder] = useState(false);
   const [ageFilter, setAgeFilter] = useState("All ages");
   const [teamFilter, setTeamFilter] = useState("All teams");
   const today = new Date();
@@ -452,6 +453,7 @@ function Overview({ data, clubName, onNavigate }: { data: Bootstrap; clubName: s
   });
   const dateLocale = locale === "sv" ? "sv-SE" : "en-GB";
   const weekLabel = new Intl.DateTimeFormat(dateLocale, { day: "numeric", month: "short" }).formatRange(weekDays[0].date, weekDays[6].date);
+  const todayKey = dateInputValue(today);
   const ages = [...new Set(data.teams.map((team) => team.ageGroup))].sort();
   const filteredTeams = data.teams.filter((team) => ageFilter === "All ages" || team.ageGroup === ageFilter);
   const filteredPlans = data.plans.filter((plan) => {
@@ -459,6 +461,9 @@ function Overview({ data, clubName, onNavigate }: { data: Bootstrap; clubName: s
     return (ageFilter === "All ages" || team?.ageGroup === ageFilter)
       && (teamFilter === "All teams" || plan.teamId === teamFilter);
   });
+  const weekPlans = filteredPlans.filter((plan) => weekDays.some((day) => day.key === plan.date.slice(0, 10)));
+  const olderWeekPlans = weekPlans.filter((plan) => plan.date.slice(0, 10) < todayKey);
+  const visibleWeekPlans = weekPlans.filter((plan) => showOlder || plan.date.slice(0, 10) >= todayKey);
   const pending = data.requests.filter((item) => item.status === "pending").length;
   return localize(<div className="overview-page">
     <Card className="week-calendar">
@@ -480,22 +485,22 @@ function Overview({ data, clubName, onNavigate }: { data: Bootstrap; clubName: s
       </div>
       <div className="week-calendar-grid">
         {weekDays.map(({ date, key }) => {
-          const dayPlans = filteredPlans.filter((plan) => plan.date.slice(0, 10) === key).sort((a, b) => a.title.localeCompare(b.title));
+          const dayPlans = visibleWeekPlans.filter((plan) => plan.date.slice(0, 10) === key).sort((a, b) => a.title.localeCompare(b.title));
           const isToday = key === `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
           return <section className={`week-calendar-day ${isToday ? "is-today" : ""}`} key={key}>
             <div className="week-day-heading"><span>{new Intl.DateTimeFormat(dateLocale, { weekday: "short" }).format(date)}</span><strong>{date.getDate()}</strong></div>
             {dayPlans.length ? <div className="week-day-sessions">{dayPlans.map((plan) => {
               const team = data.teams.find((item) => item.id === plan.teamId);
-              return <article className="week-session" key={plan.id}>
+              return <button type="button" className="week-session" key={plan.id} aria-label={`${plan.title}, ${team?.name || "Team"}, ${plan.duration} min`} onClick={() => onOpenTraining(plan.id)}>
                 <strong data-no-translate>{plan.title}</strong>
                 <span data-no-translate={Boolean(team)}>{team?.name || "Team"}</span>
                 <small>{team?.ageGroup || "—"} · {plan.duration} min</small>
-              </article>;
+              </button>;
             })}</div> : <span className="week-day-empty">—</span>}
           </section>;
         })}
       </div>
-      <div className="week-calendar-footer"><span>{filteredPlans.filter((plan) => weekDays.some((day) => day.key === plan.date.slice(0, 10))).length} sessions this week</span><button className="text-action" onClick={() => onNavigate("planner")}>View planner <ArrowUpRight size={14} /></button></div>
+      <div className="week-calendar-footer"><span>{visibleWeekPlans.length} sessions this week</span><div className="week-calendar-footer-actions">{olderWeekPlans.length > 0 && <button type="button" className="text-action" aria-expanded={showOlder} onClick={() => setShowOlder((current) => !current)}>{showOlder ? "Hide older" : "Show older"}{!showOlder && ` (${olderWeekPlans.length})`}</button>}<button className="text-action" onClick={() => onNavigate("planner")}>View planner <ArrowUpRight size={14} /></button></div></div>
     </Card>
     <div className="section-heading stats-heading"><div><span className="section-kicker">YOUR CLUB AT A GLANCE</span><h2>Practice, in good shape.</h2></div><span className="muted-small">A little progress every session</span></div>
     <div className="stats-grid">
@@ -636,12 +641,17 @@ function TrainingDetailPage({ plan, template, data, exerciseById, canEdit, savin
 
 function PlannerPage({ data, exerciseById, canEdit, saving, onTeamsChange, onCreate, onCreateTemplate, onEdit, onOpen, onShare, onSchedule, onOpenTemplate, onEditTemplate, onDeleteTemplate, onDelete }: { data: Bootstrap; exerciseById: Map<string, Exercise>; canEdit: boolean; saving: boolean; onTeamsChange: (teamIds: string[]) => Promise<boolean>; onCreate: () => void; onCreateTemplate: () => void; onEdit: (plan: TrainingPlan) => void; onOpen: (id: string) => void; onShare: (id: string) => void; onSchedule: (template: TrainingTemplate) => void; onOpenTemplate: (id: string, edit?: boolean) => void; onEditTemplate: (template: TrainingTemplate) => void; onDeleteTemplate: (template: TrainingTemplate) => void; onDelete: (plan: TrainingPlan) => void }) {
   const [selectedTeamIds, setSelectedTeamIds] = useState<string[]>(() => data.user.interestedTeamIds ?? data.teams.map((team) => team.id));
+  const [showOlder, setShowOlder] = useState(false);
   useEffect(() => {
     setSelectedTeamIds(data.user.interestedTeamIds ?? data.teams.map((team) => team.id));
   }, [data.user.interestedTeamIds, data.teams]);
-  const sorted = [...data.plans]
+  const selectedPlans = [...data.plans]
     .filter((plan) => selectedTeamIds.includes(plan.teamId))
     .sort((a, b) => a.date.localeCompare(b.date));
+  const today = dateInputValue(new Date());
+  const upcoming = selectedPlans.filter((plan) => plan.date.slice(0, 10) >= today);
+  const older = selectedPlans.filter((plan) => plan.date.slice(0, 10) < today).reverse();
+  const visiblePlans = showOlder ? [...upcoming, ...older] : upcoming;
   const selectedAgeGroups = new Set(data.teams.filter((team) => selectedTeamIds.includes(team.id)).map((team) => team.ageGroup));
   const visibleTemplates = data.templates.filter((template) => {
     if (!template.ageGroup) return canEdit;
@@ -656,8 +666,9 @@ function PlannerPage({ data, exerciseById, canEdit, saving, onTeamsChange, onCre
       <Button variant="secondary" disabled={saving || !data.teams.length || (data.user.interestedTeamIds ?? data.teams.map((team) => team.id)).join("|") === selectedTeamIds.join("|")} onClick={() => void onTeamsChange(selectedTeamIds)}>{saving ? "Saving…" : "Save team selection"}</Button>
     </Card>
     {data.templates.length > 0 && <section className="template-section"><div className="section-heading"><div><span className="section-kicker">READY-TO-USE PRACTICES</span><h2>Training templates</h2></div><span className="muted-small">For selected teams</span></div>{visibleTemplates.length ? <div className="template-list">{visibleTemplates.map((template) => <TemplateCard key={template.id} template={template} exerciseById={exerciseById} canEdit={canEdit} onOpen={() => onOpenTemplate(template.id)} onSchedule={() => onSchedule(template)} onEdit={() => onEditTemplate(template)} onDelete={() => onDeleteTemplate(template)} />)}</div> : <Card className="template-empty"><p>No training templates match the selected teams’ age groups.</p></Card>}</section>}
-    <div className="planner-summary"><div><div className="summary-icon"><CalendarDays size={18} /></div><span><strong>{sorted.length} sessions</strong><small>for selected teams</small></span></div><div><div className="summary-icon green-summary"><Clock3 size={18} /></div><span><strong>{sorted.reduce((total, plan) => total + plan.duration, 0)} min</strong><small>court time scheduled</small></span></div><div><div className="summary-icon peach-summary"><Users size={18} /></div><span><strong>{selectedTeamIds.length} teams</strong><small>selected</small></span></div></div>
-    {sorted.length ? <div className="plan-list">{sorted.map((plan, index) => <PlanCard key={plan.id} plan={plan} data={data} exerciseById={exerciseById} canEdit={canEdit} index={index} onEdit={() => onEdit(plan)} onOpen={() => onOpen(plan.id)} onShare={() => onShare(plan.id)} onDelete={() => onDelete(plan)} />)}</div> : <Card><EmptyState icon={CalendarDays} title={selectedTeamIds.length ? "No sessions on the calendar" : "No teams selected"} text={selectedTeamIds.length ? "Put together a practice and make the most of your court time." : "Select one or more teams above to see their planned trainings."} action={selectedTeamIds.length ? "Plan your first session" : "Choose teams"} onClick={selectedTeamIds.length ? onCreate : () => document.querySelector(".team-filter")?.scrollIntoView({ behavior: "smooth", block: "center" })} /></Card>}
+    <div className="planner-summary"><div><div className="summary-icon"><CalendarDays size={18} /></div><span><strong>{upcoming.length} sessions</strong><small>for selected teams</small></span></div><div><div className="summary-icon green-summary"><Clock3 size={18} /></div><span><strong>{upcoming.reduce((total, plan) => total + plan.duration, 0)} min</strong><small>court time scheduled</small></span></div><div><div className="summary-icon peach-summary"><Users size={18} /></div><span><strong>{selectedTeamIds.length} teams</strong><small>selected</small></span></div></div>
+    {visiblePlans.length ? <div className="plan-list">{visiblePlans.map((plan, index) => <PlanCard key={plan.id} plan={plan} data={data} exerciseById={exerciseById} canEdit={canEdit} index={index} onEdit={() => onEdit(plan)} onOpen={() => onOpen(plan.id)} onShare={() => onShare(plan.id)} onDelete={() => onDelete(plan)} />)}</div> : older.length ? <Card className="older-sessions-empty"><p>There are no upcoming sessions for the selected teams.</p></Card> : <Card><EmptyState icon={CalendarDays} title={selectedTeamIds.length ? "No sessions on the calendar" : "No teams selected"} text={selectedTeamIds.length ? "Put together a practice and make the most of your court time." : "Select one or more teams above to see their planned trainings."} action={selectedTeamIds.length ? "Plan your first session" : "Choose teams"} onClick={selectedTeamIds.length ? onCreate : () => document.querySelector(".team-filter")?.scrollIntoView({ behavior: "smooth", block: "center" })} /></Card>}
+    {older.length > 0 && <button type="button" className="show-older-link" aria-expanded={showOlder} onClick={() => setShowOlder((current) => !current)}>{showOlder ? "Hide older" : "Show older"}{!showOlder && ` (${older.length})`}</button>}
   </div>);
 }
 function PlanCard({ plan, data, exerciseById, canEdit, index, onEdit, onOpen, onShare, onDelete }: { plan: TrainingPlan; data: Bootstrap; exerciseById: Map<string, Exercise>; canEdit: boolean; index: number; onEdit: () => void; onOpen: () => void; onShare: () => void; onDelete: () => void }) {
