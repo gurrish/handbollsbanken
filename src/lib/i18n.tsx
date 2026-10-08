@@ -275,6 +275,7 @@ const translations: Record<string, string> = {
   "SAVES WITH EXERCISE": "SPARAS MED ÖVNINGEN",
   "EXERCISE": "ÖVNING",
   "You have view-only access to diagrams.": "Du har endast läsbehörighet till diagram.",
+  "Click Edit details to edit the diagram.": "Klicka på Redigera detaljer för att redigera diagrammet.",
   "Diagram could not be saved.": "Det gick inte att spara diagrammet.",
   "Saving your diagram…": "Sparar diagrammet…",
   "Player": "Spelare",

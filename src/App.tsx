@@ -529,9 +529,10 @@ function ExerciseDetailPage({ exercise, canEdit, saving: savingDetails, startEdi
       <Card className="diagram-card exercise-diagram-card">
         <div className="diagram-titlebar"><div><div className="diagram-eyebrow"><span className="green-pip" /> COURT SKETCH <span>·</span> SAVES WITH EXERCISE</div><h2>Exercise diagram</h2></div></div>
         {!canEdit && <p className="read-only-note">You have view-only access to diagrams.</p>}
+        {canEdit && !editing && <p className="read-only-note">Click Edit details to edit the diagram.</p>}
         {error && <ErrorBanner message={error} onClose={() => setError("")} />}
-        <div className={!canEdit ? "diagram-readonly" : ""}><DiagramEditor key={exercise.id} value={exercise.diagramJson} onSave={async (value) => {
-          if (!canEdit) return;
+        <div className={!canEdit || !editing ? "diagram-readonly" : ""}><DiagramEditor key={`${exercise.id}-${editing}`} value={exercise.diagramJson} readOnly={!canEdit || !editing} onSave={async (value) => {
+          if (!canEdit || !editing) return;
           setSaving(true);
           setError("");
           try {
