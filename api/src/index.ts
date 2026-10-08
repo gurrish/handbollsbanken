@@ -1,6 +1,6 @@
 import { app, type HttpRequest, type InvocationContext } from "@azure/functions";
 import { createHash, randomUUID } from "node:crypto";
-import { clubInput, decisionInput, displayNameInput, exerciseInput, interestedTeamsInput, joinRequestInput, planInput, roleInput, teamInput, templateInput, type Club, type Exercise, type JoinRequest, type Role, type Team, type TrainingPlan, type TrainingTemplate, type User } from "./domain.js";
+import { clubInput, decisionInput, displayNameInput, exerciseInput, interestedTeamsInput, joinRequestInput, planInput, recurringTemplateScheduleInput, roleInput, teamInput, templateInput, type Club, type Exercise, type JoinRequest, type Role, type Team, type TrainingPlan, type TrainingTemplate, type User } from "./domain.js";
 import { getRepository, type Repository } from "./repository.js";
 
 interface Identity {
@@ -341,6 +341,41 @@ export async function handle(request: HttpRequest, context: InvocationContext): 
     }
     if (resource === "templates" && method === "GET") {
       return json(await repo.list<TrainingTemplate>("TrainingTemplates", requireClub(user)));
+    }
+    if (resource === "templates" && id && action === "schedule" && method === "POST") {
+      requireRole(user, "ClubAdmin", "Coach");
+      const clubId = requireClub(user);
+      const template = await repo.get<TrainingTemplate>("TrainingTemplates", clubId, id);
+      if (!template) throw new HttpError(404, "Training template not found.");
+      const { teamId, date, endDate } = await body(request, recurringTemplateScheduleInput);
+      const [team, clubExercises] = await Promise.all([
+        repo.get<Team>("Teams", clubId, teamId),
+        repo.list<Exercise>("Exercises", clubId),
+      ]);
+      if (!team) throw new HttpError(400, "Choose a team from your club.");
+      const allowedExerciseIds = new Set([...clubExercises.map((exercise) => exercise.id), ...(template.customExercises || []).map((exercise) => exercise.id)]);
+      if (template.exerciseIds.some((exerciseId) => !allowedExerciseIds.has(exerciseId))) {
+        throw new HttpError(400, "Training templates can only use exercises from your club.");
+      }
+      const lastDay = Date.parse(`${endDate}T00:00:00.000Z`);
+      const plans: TrainingPlan[] = [];
+      for (let currentDay = Date.parse(`${date}T00:00:00.000Z`); currentDay <= lastDay; currentDay += 7 * 24 * 60 * 60 * 1000) {
+        const plan: TrainingPlan = {
+          id: randomUUID(),
+          clubId,
+          teamId,
+          title: template.title,
+          date: new Date(currentDay).toISOString().slice(0, 10),
+          duration: template.duration,
+          exerciseIds: template.exerciseIds,
+          customExercises: template.customExercises,
+          exerciseDurations: template.exerciseDurations,
+          notes: template.notes,
+        };
+        await repo.upsert("TrainingPlans", clubId, plan);
+        plans.push(plan);
+      }
+      return json({ plans }, 201);
     }
     if (resource === "templates" && method === "POST") {
       requireRole(user, "ClubAdmin", "Coach");

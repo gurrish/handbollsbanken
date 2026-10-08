@@ -23,3 +23,5 @@ export const savePlan = (plan: Omit<TrainingPlan, "id" | "clubId">, id?: string)
   api<TrainingPlan>(id ? `plans/${id}` : "plans", { method: id ? "PUT" : "POST", body: JSON.stringify(plan) });
 export const saveTemplate = (template: Omit<TrainingTemplate, "id" | "clubId">, id?: string) =>
   api<TrainingTemplate>(id ? `templates/${id}` : "templates", { method: id ? "PUT" : "POST", body: JSON.stringify(template) });
+export const scheduleTemplateWeekly = (templateId: string, schedule: { teamId: string; date: string; endDate: string }) =>
+  api<{ plans: TrainingPlan[] }>(`templates/${templateId}/schedule`, { method: "POST", body: JSON.stringify(schedule) });

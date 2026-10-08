@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Activity, ArrowDown, ArrowLeft, ArrowUp, ArrowUpRight, CalendarDays, Check, ChevronDown, CircleHelp,
+  Activity, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, CalendarDays, Check, ChevronDown, CircleHelp,
   Clock3, Copy, Dumbbell, Filter, LayoutDashboard, Library, LogOut, Menu, Printer,
   Pencil, Plus, Search, Share2, Shield, Sparkles, Users, X,
 } from "lucide-react";
 import DiagramEditor from "./components/DiagramEditor";
 import { Badge, Button, Card, Field, Input, Modal, Select, Textarea } from "./components/ui";
-import { api, loadBootstrap, saveExercise, savePlan, saveTemplate } from "./lib/api";
+import { api, loadBootstrap, saveExercise, savePlan, saveTemplate, scheduleTemplateWeekly } from "./lib/api";
 import { LanguageSelect, localize, translateText, useLocale } from "./lib/i18n";
 import type { Bootstrap, Exercise, Role, TrainingPlan, TrainingTemplate } from "./types";
 
@@ -17,7 +17,7 @@ const navItems: { id: Page; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "planner", label: "Training planner", icon: CalendarDays },
   { id: "admin", label: "Club administration", icon: Users },
 ];
-const demoCategories = ["Attack", "Passing", "Shooting", "Defense", "Warm-up", "Footwork"];
+const demoCategories = ["Attack", "Passing", "Shooting", "Defense", "Warm-up", "Footwork", "Core", "Other"];
 const ageGroups = [
   { value: "HBS", label: "HBS (6–8)" },
   { value: "U9", label: "U9" },
@@ -33,6 +33,9 @@ const roleLabel: Record<Role, string> = { GlobalAdmin: "Global admin", ClubAdmin
 function dateLabel(value: string, options?: Intl.DateTimeFormatOptions, locale: "sv" | "en" = "sv") {
   if (!value) return "Date to be decided";
   return new Intl.DateTimeFormat(locale === "sv" ? "sv-SE" : "en-GB", options || { weekday: "short", day: "numeric", month: "short" }).format(new Date(`${value.slice(0, 10)}T12:00:00`));
+}
+function dateInputValue(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
 export default function App() {
@@ -377,9 +380,15 @@ export default function App() {
       {templateModal !== false && <PlanForm mode="template" template={templateModal || undefined} teams={data.teams} exercises={data.exercises} saving={saving} onClose={() => setTemplateModal(false)} onSave={async (value) => {
         if (!("teamId" in value) && await act(() => saveTemplate(value, templateModal?.id), templateModal ? "Template updated." : "Template created.")) setTemplateModal(false);
       }} />}
-      {scheduleTemplate && <ScheduleTemplateForm template={scheduleTemplate} teams={data.teams} saving={saving} onClose={() => setScheduleTemplate(false)} onSave={async ({ teamId, date }) => {
-        const { id: _id, clubId: _clubId, ageGroup: _ageGroup, ...content } = scheduleTemplate;
-        if (await act(() => savePlan({ ...content, teamId, date }), "Training session saved.")) setScheduleTemplate(false);
+      {scheduleTemplate && <ScheduleTemplateForm template={scheduleTemplate} teams={data.teams} saving={saving} onClose={() => setScheduleTemplate(false)} onSave={async ({ teamId, date, endDate, recurrence }) => {
+        const success = recurrence === "weekly" ? "Recurring training sessions added to the calendar." : "Training session saved.";
+        const saved = recurrence === "weekly"
+          ? await act(() => scheduleTemplateWeekly(scheduleTemplate.id, { teamId, date, endDate }), success)
+          : await act(() => {
+            const { id: _id, clubId: _clubId, ageGroup: _ageGroup, ...content } = scheduleTemplate;
+            return savePlan({ ...content, teamId, date });
+          }, success);
+        if (saved) setScheduleTemplate(false);
       }} />}
       {teamModal !== false && <TeamForm team={teamModal} saving={saving} onClose={() => setTeamModal(false)} onSave={async (value) => {
         const saved = await act(() => api(`teams/${teamModal.id}`, { method: "PUT", body: JSON.stringify(value) }), "Team updated.");
@@ -431,10 +440,63 @@ function ProfileEditor({ name, email, saving, onSave }: { name: string; email: s
 }
 
 function Overview({ data, clubName, onNavigate }: { data: Bootstrap; clubName: string; onNavigate: (page: Page) => void }) {
-  const upcoming = [...data.plans].filter((plan) => plan.date >= new Date().toISOString().slice(0, 10)).sort((a, b) => a.date.localeCompare(b.date)).slice(0, 3);
+  const { locale } = useLocale();
+  const [weekOffset, setWeekOffset] = useState(0);
+  const [ageFilter, setAgeFilter] = useState("All ages");
+  const [teamFilter, setTeamFilter] = useState("All teams");
+  const today = new Date();
+  const weekStart = new Date(today.getFullYear(), today.getMonth(), today.getDate() - ((today.getDay() + 6) % 7) + weekOffset * 7);
+  const weekDays = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + index);
+    return { date, key: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}` };
+  });
+  const dateLocale = locale === "sv" ? "sv-SE" : "en-GB";
+  const weekLabel = new Intl.DateTimeFormat(dateLocale, { day: "numeric", month: "short" }).formatRange(weekDays[0].date, weekDays[6].date);
+  const ages = [...new Set(data.teams.map((team) => team.ageGroup))].sort();
+  const filteredTeams = data.teams.filter((team) => ageFilter === "All ages" || team.ageGroup === ageFilter);
+  const filteredPlans = data.plans.filter((plan) => {
+    const team = data.teams.find((item) => item.id === plan.teamId);
+    return (ageFilter === "All ages" || team?.ageGroup === ageFilter)
+      && (teamFilter === "All teams" || plan.teamId === teamFilter);
+  });
   const pending = data.requests.filter((item) => item.status === "pending").length;
   return localize(<div className="overview-page">
-    <div className="welcome-banner"><div className="welcome-content"><div className="eyebrow"><Sparkles size={14} /> YOUR COACHING SPACE</div><h1>Good to see you, <span data-no-translate>{data.user.name.split(" ")[0]}</span><span className="wave">✳</span></h1><p>A fresh week is a good time to get your team moving.</p><Button onClick={() => onNavigate("planner")}><Plus size={16} /> Plan a session</Button></div><div className="welcome-art"><div className="welcome-court"><div className="court-line court-middle" /><div className="court-circle" /><div className="court-ball">H</div><span className="court-player player-one" /><span className="court-player player-two" /><span className="court-player player-three" /></div><div className="art-spark spark-a">✳</div><div className="art-spark spark-b">✦</div></div></div>
+    <Card className="week-calendar">
+      <div className="week-calendar-heading">
+        <div><span className="section-kicker">YOUR TRAINING WEEK</span><h1>{weekLabel}</h1></div>
+        <div className="week-calendar-controls">
+          <Select aria-label="Filter by age group" value={ageFilter} onChange={(event) => { setAgeFilter(event.target.value); setTeamFilter("All teams"); }}>
+            <option>All ages</option>{ages.map((age) => <option key={age} value={age}>{age}</option>)}
+          </Select>
+          <Select aria-label="Filter by team" value={teamFilter} onChange={(event) => setTeamFilter(event.target.value)}>
+            <option>All teams</option>{filteredTeams.map((team) => <option key={team.id} value={team.id}>{team.name}</option>)}
+          </Select>
+          <div className="week-navigation">
+            <Button variant="secondary" aria-label="Previous week" onClick={() => setWeekOffset((offset) => offset - 1)}><ArrowLeft size={14} /></Button>
+            <Button variant="secondary" onClick={() => setWeekOffset(0)}>This week</Button>
+            <Button variant="secondary" aria-label="Next week" onClick={() => setWeekOffset((offset) => offset + 1)}><ArrowRight size={14} /></Button>
+          </div>
+        </div>
+      </div>
+      <div className="week-calendar-grid">
+        {weekDays.map(({ date, key }) => {
+          const dayPlans = filteredPlans.filter((plan) => plan.date.slice(0, 10) === key).sort((a, b) => a.title.localeCompare(b.title));
+          const isToday = key === `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+          return <section className={`week-calendar-day ${isToday ? "is-today" : ""}`} key={key}>
+            <div className="week-day-heading"><span>{new Intl.DateTimeFormat(dateLocale, { weekday: "short" }).format(date)}</span><strong>{date.getDate()}</strong></div>
+            {dayPlans.length ? <div className="week-day-sessions">{dayPlans.map((plan) => {
+              const team = data.teams.find((item) => item.id === plan.teamId);
+              return <article className="week-session" key={plan.id}>
+                <strong data-no-translate>{plan.title}</strong>
+                <span data-no-translate={Boolean(team)}>{team?.name || "Team"}</span>
+                <small>{team?.ageGroup || "—"} · {plan.duration} min</small>
+              </article>;
+            })}</div> : <span className="week-day-empty">—</span>}
+          </section>;
+        })}
+      </div>
+      <div className="week-calendar-footer"><span>{filteredPlans.filter((plan) => weekDays.some((day) => day.key === plan.date.slice(0, 10))).length} sessions this week</span><button className="text-action" onClick={() => onNavigate("planner")}>View planner <ArrowUpRight size={14} /></button></div>
+    </Card>
     <div className="section-heading stats-heading"><div><span className="section-kicker">YOUR CLUB AT A GLANCE</span><h2>Practice, in good shape.</h2></div><span className="muted-small">A little progress every session</span></div>
     <div className="stats-grid">
       <StatCard icon={CalendarDays} tone="blue" value={data.plans.length.toString().padStart(2, "0")} label="Sessions planned" detail="Across your teams" />
@@ -442,25 +504,11 @@ function Overview({ data, clubName, onNavigate }: { data: Bootstrap; clubName: s
       <StatCard icon={Users} tone="peach" value={data.teams.length.toString().padStart(2, "0")} label="Active teams" detail={clubName} />
       <StatCard icon={Activity} tone="violet" value={`${data.exercises.length ? Math.min(100, Math.round(data.exercises.length / 20 * 100)) : 0}%`} label="Library built" detail="Keep adding your favourites" />
     </div>
-    <div className="overview-grid">
-      <Card className="upcoming-card"><div className="card-heading"><div><span className="section-kicker">UP NEXT</span><h3>Your upcoming sessions</h3></div><button className="text-action" onClick={() => onNavigate("planner")}>View planner <ArrowUpRight size={14} /></button></div>
-        {upcoming.length ? <div className="session-list">{upcoming.map((plan) => <SessionRow key={plan.id} plan={plan} data={data} />)}</div> : <EmptyState icon={CalendarDays} title="Your court is open" text="Create your first session and get the team moving." action="Plan a session" onClick={() => onNavigate("planner")} />}
-      </Card>
-      <div className="overview-right">
-        <Card className="quick-card"><div className="quick-heading"><span className="section-kicker">QUICK START</span><h3>What are we working on?</h3><p>Jump straight into the good stuff.</p></div><button className="quick-link" onClick={() => onNavigate("library")}><div className="quick-icon quick-blue"><Library size={18} /></div><span><strong>Find an exercise</strong><small>Explore your club’s library</small></span><ArrowUpRight size={16} /></button></Card>
-        <Card className="coach-tip"><div className="tip-graphic"><Sparkles size={18} /></div><div><span className="section-kicker">A LITTLE REMINDER</span><p>“Great teams are built one good repetition at a time.”</p><span className="tip-byline">Take it one drill at a time.</span></div></Card>
-        {pending > 0 && <button className="pending-banner" onClick={() => onNavigate("admin")}><div className="pending-badge">{pending}</div><span><strong>{pending > 1 ? "Coach requests to review" : "Coach request to review"}</strong><small>Your club is waiting on you</small></span><ArrowUpRight size={16} /></button>}
-      </div>
-    </div>
+    {pending > 0 && <button className="pending-banner" onClick={() => onNavigate("admin")}><div className="pending-badge">{pending}</div><span><strong>{pending > 1 ? "Coach requests to review" : "Coach request to review"}</strong><small>Your club is waiting on you</small></span><ArrowUpRight size={16} /></button>}
   </div>);
 }
 function StatCard({ icon: Icon, tone, value, label, detail }: { icon: typeof CalendarDays; tone: string; value: string; label: string; detail: string }) {
   return localize(<Card className="stat-card"><div className={`stat-icon stat-${tone}`}><Icon size={18} /></div><strong className="stat-value">{value}</strong><span className="stat-label">{label}</span><span className="stat-detail">{detail}</span></Card>);
-}
-function SessionRow({ plan, data }: { plan: TrainingPlan; data: Bootstrap }) {
-  const { locale } = useLocale();
-  const team = data.teams.find((item) => item.id === plan.teamId);
-  return localize(<div className="session-row"><div className="date-tile"><strong>{new Date(`${plan.date.slice(0, 10)}T12:00:00`).getDate()}</strong><span>{new Intl.DateTimeFormat(locale === "sv" ? "sv-SE" : "en-GB", { month: "short" }).format(new Date(`${plan.date.slice(0, 10)}T12:00:00`))}</span></div><div className="session-main"><strong data-no-translate>{plan.title}</strong><span><span data-no-translate={Boolean(team)}>{team?.name || "Team"}</span> · {plan.exerciseIds.length} exercises</span></div><span className="session-duration"><Clock3 size={14} />{plan.duration} min</span><ArrowUpRight size={16} className="session-arrow" /></div>);
 }
 function EmptyState({ icon: Icon, title, text, action, onClick }: { icon: typeof CalendarDays; title: string; text: string; action: string; onClick: () => void }) {
   return localize(<div className="empty-state"><div className="empty-icon"><Icon size={21} /></div><h4>{title}</h4><p>{text}</p><Button variant="secondary" onClick={onClick}><Plus size={15} />{action}</Button></div>);
@@ -629,9 +677,10 @@ function PlanTimeline({ plan, exerciseById }: { plan: Pick<TrainingPlan, "exerci
     return { id, index, start, end: elapsed, duration, name: exerciseById.get(id)?.title || plan.customExercises?.find((item) => item.id === id)?.title || "Exercise" };
   });
   const clock = (minutes: number) => `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, "0")}`;
+  const timelineColumns = segments.map((segment) => `minmax(4px, ${segment.duration}fr)`).join(" ");
   return localize(<div className="plan-timeline">
-    <div className="timeline-bar">{segments.length ? segments.map((segment) => <span key={`${segment.id}-${segment.index}`} className={`timeline-segment timeline-tone-${segment.index % 4}`} style={{ width: `${segment.duration / plan.duration * 100}%` }} title={`${segment.name}: ${segment.duration} min`} />) : <span className="timeline-empty-segment" />}</div>
-    {segments.length ? <div className="timeline-labels">{segments.map((segment) => <div className="timeline-label" key={`${segment.id}-${segment.index}`}><span>{clock(segment.start)}–{clock(segment.end)}</span><strong>{segment.name}</strong></div>)}</div> : <span className="timeline-empty-label">Add exercises to map out your session flow.</span>}
+    <div className="timeline-bar" style={segments.length ? { gridTemplateColumns: timelineColumns } : undefined}>{segments.length ? segments.map((segment) => <span key={`${segment.id}-${segment.index}`} className={`timeline-segment timeline-tone-${segment.index % 4}`} title={`${segment.name}: ${segment.duration} min`} />) : <span className="timeline-empty-segment" />}</div>
+    {segments.length ? <div className="timeline-labels" style={{ gridTemplateColumns: timelineColumns }}>{segments.map((segment) => <div className="timeline-label" key={`${segment.id}-${segment.index}`}><span>{clock(segment.start)}–{clock(segment.end)}</span><strong>{segment.name}</strong></div>)}</div> : <span className="timeline-empty-label">Add exercises to map out your session flow.</span>}
   </div>);
 }
 function exerciseMinutes(plan: Pick<TrainingPlan, "duration" | "exerciseIds" | "exerciseDurations"> | undefined, id: string, index: number) {
@@ -754,14 +803,31 @@ function PlanForm({ mode = "plan", plan, template, teams = [], exercises, saving
   return localize(inline ? <Card className="training-editor-card">{form}</Card> : <Modal title={mode === "template" ? (template ? "Edit training template" : "Create training template") : plan ? "Edit training session" : "Plan a session"} onClose={onClose} wide>{form}</Modal>);
 }
 
-function ScheduleTemplateForm({ template, teams, saving, onClose, onSave }: { template: TrainingTemplate; teams: Bootstrap["teams"]; saving: boolean; onClose: () => void; onSave: (value: { teamId: string; date: string }) => Promise<void> }) {
+function ScheduleTemplateForm({ template, teams, saving, onClose, onSave }: { template: TrainingTemplate; teams: Bootstrap["teams"]; saving: boolean; onClose: () => void; onSave: (value: { teamId: string; date: string; endDate: string; recurrence: "once" | "weekly" }) => Promise<void> }) {
   const [teamId, setTeamId] = useState(teams[0]?.id || "");
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
-  return localize(<Modal title="Add training template to calendar" onClose={onClose}><form className="modal-form" onSubmit={(event) => { event.preventDefault(); void onSave({ teamId, date }); }}>
-    <p className="modal-lead"><strong data-no-translate>{template.title}</strong> · {template.duration} min. This creates a scheduled copy; the training template stays unchanged.</p>
+  const [recurrence, setRecurrence] = useState<"once" | "weekly">("weekly");
+  const [date, setDate] = useState(() => dateInputValue(new Date()));
+  const [endDate, setEndDate] = useState(() => {
+    const date = new Date();
+    date.setDate(date.getDate() + 56);
+    return dateInputValue(date);
+  });
+  const occurrenceCount = date && endDate
+    ? Math.floor((Date.parse(`${endDate}T00:00:00Z`) - Date.parse(`${date}T00:00:00Z`)) / (7 * 24 * 60 * 60 * 1000)) + 1
+    : 0;
+  const validRange = recurrence === "once" || (occurrenceCount > 0 && occurrenceCount <= 53);
+  return localize(<Modal title="Schedule training from template" onClose={onClose}><form className="modal-form" onSubmit={(event) => { event.preventDefault(); if (validRange) void onSave({ teamId, date, endDate, recurrence }); }}>
+    <p className="modal-lead"><strong data-no-translate>{template.title}</strong> · {template.duration} min. Creates a scheduled copy; the training template stays unchanged.</p>
     <Field label="Team"><Select required value={teamId} onChange={(event) => setTeamId(event.target.value)}><option value="">Choose team…</option>{teams.map((team) => <option key={team.id} value={team.id}>{team.name} · {team.ageGroup}</option>)}</Select></Field>
-    <Field label="Date"><Input type="date" required value={date} onChange={(event) => setDate(event.target.value)} /></Field>
-    <div className="modal-actions"><Button type="button" variant="ghost" onClick={onClose}>Cancel</Button><Button type="submit" disabled={saving || !teams.length}>{saving ? "Saving…" : "Add to calendar"} <CalendarDays size={15} /></Button></div>
+    <div className="form-row">
+      <Field label="First session"><Input type="date" required value={date} onChange={(event) => setDate(event.target.value)} /></Field>
+      <Field label="Repeats"><Select value={recurrence} onChange={(event) => setRecurrence(event.target.value === "weekly" ? "weekly" : "once")}><option value="weekly">Weekly</option><option value="once">Just once</option></Select></Field>
+    </div>
+    {recurrence === "weekly" && <>
+      <Field label="Repeat through"><Input type="date" required min={date} value={endDate} onChange={(event) => setEndDate(event.target.value)} /></Field>
+      <p className="recurrence-summary">{validRange ? <>{occurrenceCount} {occurrenceCount === 1 ? "weekly session will be added." : "weekly sessions will be added."}</> : "Choose an end date on or after the first session, with no more than 53 weekly sessions."}</p>
+    </>}
+    <div className="modal-actions"><Button type="button" variant="ghost" onClick={onClose}>Cancel</Button><Button type="submit" disabled={saving || !teams.length || !validRange}>{saving ? "Saving…" : recurrence === "weekly" ? "Add recurring sessions" : "Add to calendar"} <CalendarDays size={15} /></Button></div>
     {!teams.length && <p className="form-error">Ask a club admin to add a team before scheduling a session.</p>}
   </form></Modal>);
 }

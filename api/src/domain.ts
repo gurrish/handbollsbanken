@@ -139,6 +139,23 @@ export const planInput = z.object({
   }, "Date must be a valid calendar date."),
   ...trainingContentFields,
 }).superRefine(validateTrainingContent);
+const calendarDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine((value) => {
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return !Number.isNaN(parsed.valueOf()) && parsed.toISOString().slice(0, 10) === value;
+}, "Date must be a valid calendar date.");
+export const recurringTemplateScheduleInput = z.object({
+  teamId: z.string().min(1),
+  date: calendarDate,
+  endDate: calendarDate,
+}).superRefine(({ date, endDate }, context) => {
+  const firstDay = Date.parse(`${date}T00:00:00.000Z`);
+  const lastDay = Date.parse(`${endDate}T00:00:00.000Z`);
+  if (lastDay < firstDay) {
+    context.addIssue({ code: "custom", path: ["endDate"], message: "End date must be on or after the first session date." });
+  } else if (Math.floor((lastDay - firstDay) / (7 * 24 * 60 * 60 * 1000)) + 1 > 53) {
+    context.addIssue({ code: "custom", path: ["endDate"], message: "A recurring series cannot exceed 53 sessions." });
+  }
+});
 export const templateInput = z.object({
   ageGroup: z.string().trim().min(1).max(40),
   ...trainingContentFields,

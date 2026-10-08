@@ -19,9 +19,9 @@ const tools = [
 ] as const;
 const colors = { player: "#3158d6", keeper: "#ed9c35", cone: "#e5764d", goal: "#34415c", ball: "#d5aa35", pass: "#32a57b", movement: "#8058cc", arrow: "#68748d", text: "#293550" };
 const initialItems: DiagramItem[] = [
-  { id: "p1", type: "player", x: 140, y: 115, width: 36, height: 36 },
-  { id: "p2", type: "player", x: 245, y: 215, width: 36, height: 36 },
-  { id: "gk1", type: "keeper", x: 452, y: 160, width: 38, height: 38 },
+  { id: "p1", type: "player", x: 140, y: 115, width: 18, height: 18 },
+  { id: "p2", type: "player", x: 245, y: 215, width: 18, height: 18 },
+  { id: "gk1", type: "keeper", x: 452, y: 160, width: 19, height: 19 },
   { id: "goal1", type: "goal", x: 525, y: 145, width: 48, height: 80 },
   { id: "a1", type: "pass", x: 160, y: 125, width: 110, height: 88 },
 ];
@@ -65,7 +65,19 @@ export default function DiagramEditor({ value, onSave, readOnly = false }: { val
   }, [selectedId, readOnly]);
   const add = (type: DiagramItem["type"]) => {
     const id = crypto.randomUUID();
-    setItems((current) => [...current, { id, type, x: 180 + Math.random() * 140, y: 90 + Math.random() * 130, width: type === "arrow" || type === "pass" || type === "movement" ? 120 : type === "text" ? 100 : 40, height: type === "arrow" || type === "pass" || type === "movement" ? 70 : 40, text: type === "text" ? "Text" : undefined }]);
+    const dimensions = {
+      player: 18,
+      keeper: 19,
+      ball: 20,
+      arrow: 120,
+      pass: 120,
+      movement: 120,
+      text: 100,
+      cone: 40,
+      goal: 40,
+    } satisfies Record<DiagramItem["type"], number>;
+    const size = dimensions[type];
+    setItems((current) => [...current, { id, type, x: 180 + Math.random() * 140, y: 90 + Math.random() * 130, width: size, height: type === "arrow" || type === "pass" || type === "movement" ? 70 : size, text: type === "text" ? "Text" : undefined }]);
     setSelectedId(id);
   };
   const updateItem = (id: string, change: Partial<DiagramItem>) =>
@@ -87,6 +99,7 @@ export default function DiagramEditor({ value, onSave, readOnly = false }: { val
           <Button variant="ghost" onClick={() => { setItems([]); setSelectedId(null); }}><RotateCcw size={15} /> Clear</Button>
           {selectedId && <Button variant="ghost" onClick={() => updateItem(selectedId, { rotation: ((selectedItem?.rotation || 0) + 15) % 360 })}><RotateCw size={15} /> Rotate 15°</Button>}
           {selectedId && <Button variant="ghost" onClick={() => { setItems((current) => current.filter((item) => item.id !== selectedId)); setSelectedId(null); }}><Trash2 size={15} /> Delete</Button>}
+          {selectedItem?.type === "player" && <label className="player-color-picker">Player color<input type="color" aria-label="Player color" value={selectedItem.color || colors.player} onChange={(event) => updateItem(selectedItem.id, { color: event.target.value })} /></label>}
           {onSave && <Button onClick={() => void save()}><Save size={15} /> {saved ? "Saved!" : "Save diagram"}</Button>}
         </div>
       </div>}
@@ -153,14 +166,15 @@ export default function DiagramEditor({ value, onSave, readOnly = false }: { val
                 return <Arrow {...common} points={[0, 0, item.width, item.height]} stroke={colors[item.type]} fill={colors[item.type]} strokeWidth={item.type === "movement" ? 3 : 2.5} pointerLength={9} pointerWidth={9} dash={item.type === "movement" ? [8, 6] : undefined} />;
               }
               if (item.type === "player" || item.type === "keeper") {
+                const sizeScale = item.width / (item.type === "player" ? 36 : 38);
                 return <Group {...common} offsetX={item.width / 2} offsetY={item.height / 2}>
-                  <Circle radius={item.width / 2} fill={colors[item.type]} stroke="#fff" strokeWidth={2} shadowColor="#263550" shadowBlur={4} shadowOpacity={0.12} />
-                  <Text text={item.type === "player" ? "P" : "GK"} width={item.width} height={item.height} align="center" verticalAlign="middle" fontSize={item.type === "player" ? 14 : 10} fontStyle="bold" fill="#fff" />
+                  <Circle radius={item.width / 2} fill={item.type === "player" ? item.color || colors.player : colors.keeper} stroke="#fff" strokeWidth={Math.max(1, 2 * sizeScale)} shadowColor="#263550" shadowBlur={4 * sizeScale} shadowOpacity={0.12} />
+                  <Text text={item.type === "player" ? "P" : "GK"} width={item.width} height={item.height} align="center" verticalAlign="middle" fontSize={(item.type === "player" ? 14 : 10) * sizeScale} fontStyle="bold" fill="#fff" />
                 </Group>;
               }
               if (item.type === "cone") return <Line {...common} points={[0, item.height, item.width / 2, 0, item.width, item.height]} closed fill={colors.cone} stroke="#fff" strokeWidth={2} />;
               if (item.type === "goal") return <Group {...common}><Rect width={item.width} height={item.height} stroke={colors.goal} strokeWidth={4} /><Line points={[4, 5, item.width - 4, item.height - 5]} stroke="#edf0f5" /><Line points={[item.width - 4, 5, 4, item.height - 5]} stroke="#edf0f5" /></Group>;
-              if (item.type === "ball") return <Ellipse {...common} radiusX={item.width / 2} radiusY={item.height / 2} fill={colors.ball} stroke="#fff" strokeWidth={2} />;
+              if (item.type === "ball") return <Ellipse {...common} radiusX={item.width / 2} radiusY={item.height / 2} fill={colors.ball} stroke="#fff" strokeWidth={Math.max(1, item.width / 20)} />;
               return <Text {...common} text={item.text || "Text"} width={item.width} height={item.height} wrap="word" fontSize={16} fontStyle="bold" fill={colors.text} />;
             })}
             {!readOnly && <Transformer ref={transformerRef} rotateEnabled enabledAnchors={["top-left", "top-right", "bottom-left", "bottom-right"]} boundBoxFunc={(oldBox, newBox) => newBox.width < 20 || newBox.height < 20 ? oldBox : newBox} />}

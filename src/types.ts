@@ -30,5 +30,5 @@ export interface Bootstrap {
 }
 export interface DiagramItem {
   id: string; type: "player" | "keeper" | "cone" | "goal" | "ball" | "arrow" | "pass" | "movement" | "text";
-  x: number; y: number; width: number; height: number; rotation?: number; text?: string
+  x: number; y: number; width: number; height: number; rotation?: number; text?: string; color?: string
 }
