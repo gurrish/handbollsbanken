@@ -307,6 +307,7 @@ const translations: Record<string, string> = {
   "Sign in with your account to plan, share and get your team on the same page.": "Logga in för att planera, dela och samla laget kring samma plan.",
   "Continue with Microsoft": "Fortsätt med Microsoft",
   "By signing in, you agree to keep your team’s training data within your club.": "När du loggar in hanteras lagets träningsdata inom din klubb.",
+  "Continue with Google": "Fortsätt med Google",
   "Built for the love of the game": "Skapad för kärleken till sporten",
   "Handbollsbanken · Built for the love of the game": "Handbollsbanken · Skapad för kärleken till sporten",
   "We couldn’t load your workspace": "Det gick inte att läsa in arbetsytan",
