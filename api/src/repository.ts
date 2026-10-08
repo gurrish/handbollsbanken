@@ -80,7 +80,7 @@ export class TableRepository implements Repository {
   private readonly blobs: BlobServiceClient;
   constructor(connectionString: string) {
     this.blobs = BlobServiceClient.fromConnectionString(connectionString);
-    for (const tableName of ["Clubs", "Teams", "Users", "JoinRequests", "Exercises", "TrainingPlans", "TrainingTemplates"]) {
+    for (const tableName of ["Clubs", "Teams", "Users", "JoinRequests", "Exercises", "TrainingPlans", "TrainingTemplates", "TrainingSchedules"]) {
       this.clients.set(tableName, TableClient.fromConnectionString(connectionString, tableName));
     }
   }

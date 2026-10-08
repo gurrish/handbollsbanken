@@ -68,6 +68,19 @@ export interface TrainingPlan {
   customExercises?: CustomExercise[];
   exerciseDurations?: Record<string, number>;
   notes: string;
+  scheduleId?: string;
+  startTime?: string;
+}
+export interface TrainingSchedule {
+  id: string;
+  clubId: string;
+  teamId: string;
+  weekday: number;
+  startTime: string;
+  duration: number;
+  startDate: string;
+  endDate: string;
+  skippedDates: string[];
 }
 export interface CustomExercise {
   id: string;
@@ -138,8 +151,15 @@ export const planInput = z.object({
     const parsed = new Date(`${value}T00:00:00.000Z`);
     return !Number.isNaN(parsed.valueOf()) && parsed.toISOString().slice(0, 10) === value;
   }, "Date must be a valid calendar date."),
+  scheduleId: z.string().min(1).optional(),
+  startTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).optional(),
   ...trainingContentFields,
-}).superRefine(validateTrainingContent);
+}).superRefine((content, context) => {
+  validateTrainingContent(content, context);
+  if (content.scheduleId && content.exerciseIds.length === 0) {
+    context.addIssue({ code: "custom", path: ["exerciseIds"], message: "Add at least one activity from the library or as free text to fill this scheduled session." });
+  }
+});
 const calendarDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine((value) => {
   const parsed = new Date(`${value}T00:00:00.000Z`);
   return !Number.isNaN(parsed.valueOf()) && parsed.toISOString().slice(0, 10) === value;
@@ -161,6 +181,33 @@ export const templateInput = z.object({
   ageGroup: z.string().trim().min(1).max(40),
   ...trainingContentFields,
 }).superRefine(validateTrainingContent);
+const validCalendarDate = (value: string) => {
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return !Number.isNaN(parsed.valueOf()) && parsed.toISOString().slice(0, 10) === value;
+};
+export const trainingScheduleInput = z.object({
+  teamId: z.string().min(1),
+  weekday: z.number().int().min(0).max(6),
+  startTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+  duration: z.number().int().min(15).max(300),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(validCalendarDate, "Start date must be a valid calendar date."),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(validCalendarDate, "End date must be a valid calendar date."),
+}).superRefine(({ weekday, startDate, endDate }, context) => {
+  const start = Date.parse(`${startDate}T00:00:00.000Z`);
+  const end = Date.parse(`${endDate}T00:00:00.000Z`);
+  if (end < start) {
+    context.addIssue({ code: "custom", path: ["endDate"], message: "End date must be on or after the start date." });
+    return;
+  }
+  const firstWeekday = new Date(start).getUTCDay();
+  const firstOccurrence = start + ((weekday - firstWeekday + 7) % 7) * 24 * 60 * 60 * 1000;
+  if (firstOccurrence > end || Math.floor((end - firstOccurrence) / (7 * 24 * 60 * 60 * 1000)) + 1 > 53) {
+    context.addIssue({ code: "custom", path: ["endDate"], message: "The season must include at least one and no more than 53 weekly sessions." });
+  }
+});
+export const skipOccurrenceInput = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(validCalendarDate, "Date must be a valid calendar date."),
+});
 export const teamInput = z.object({
   name: z.string().trim().min(2).max(80),
   ageGroup: z.string().trim().min(1).max(40),

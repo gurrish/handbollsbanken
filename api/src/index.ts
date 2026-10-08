@@ -1,6 +1,6 @@
 import { app, type HttpRequest, type InvocationContext } from "@azure/functions";
 import { createHash, randomUUID } from "node:crypto";
-import { clubInput, decisionInput, displayNameInput, exerciseInput, interestedTeamsInput, joinRequestInput, planInput, recurringTemplateScheduleInput, roleInput, teamInput, templateInput, type Club, type Exercise, type JoinRequest, type Role, type Team, type TrainingPlan, type TrainingTemplate, type User } from "./domain.js";
+import { clubInput, decisionInput, displayNameInput, exerciseInput, interestedTeamsInput, joinRequestInput, planInput, recurringTemplateScheduleInput, roleInput, skipOccurrenceInput, teamInput, templateInput, trainingScheduleInput, type Club, type Exercise, type JoinRequest, type Role, type Team, type TrainingPlan, type TrainingSchedule, type TrainingTemplate, type User } from "./domain.js";
 import { getRepository, type Repository } from "./repository.js";
 
 interface Identity {
@@ -139,6 +139,10 @@ async function listExercises(repo: Repository, clubId: string): Promise<Exercise
     diagramJson: await repo.readDiagram(clubId, exercise.id),
   })));
 }
+function isScheduleOccurrence(schedule: TrainingSchedule, date: string): boolean {
+  if (date < schedule.startDate || date > schedule.endDate || schedule.skippedDates.includes(date)) return false;
+  return new Date(`${date}T00:00:00.000Z`).getUTCDay() === schedule.weekday;
+}
 
 export async function handle(request: HttpRequest, context: InvocationContext): Promise<Response> {
   try {
@@ -159,17 +163,18 @@ export async function handle(request: HttpRequest, context: InvocationContext): 
         : user.clubId && hasRole(user, "ClubAdmin")
           ? allRequests.filter((item) => item.clubId === user.clubId)
           : allRequests.filter((item) => item.userId === user.id);
-      const [teams, exercises, plans, templates] = user.clubId && user.status === "approved"
+      const [teams, exercises, plans, templates, schedules] = user.clubId && user.status === "approved"
         ? await Promise.all([
             repo.list("Teams", user.clubId), listExercises(repo, user.clubId),
             repo.list<TrainingPlan>("TrainingPlans", user.clubId), repo.list<TrainingTemplate>("TrainingTemplates", user.clubId),
+            repo.list<TrainingSchedule>("TrainingSchedules", user.clubId),
           ])
-        : [[], [], [], []];
+        : [[], [], [], [], []];
       const users = hasRole(user, "GlobalAdmin") || (user.clubId && user.status === "approved" && hasRole(user, "ClubAdmin"))
         ? await repo.list<User>("Users", "users")
         : [];
       return json({
-        user, clubs, teams, exercises, plans, templates, requests,
+        user, clubs, teams, exercises, plans, templates, schedules, requests,
         users: hasRole(user, "GlobalAdmin") ? users : users.filter((item) => item.clubId === user.clubId),
       });
     }
@@ -296,6 +301,66 @@ export async function handle(request: HttpRequest, context: InvocationContext): 
       await repo.deleteDiagram(clubId, id);
       return json({ ok: true });
     }
+    if (resource === "schedules" && method === "GET") {
+      return json(await repo.list<TrainingSchedule>("TrainingSchedules", requireClub(user)));
+    }
+    if (resource === "schedules" && method === "POST") {
+      requireRole(user, "ClubAdmin", "Coach");
+      const clubId = requireClub(user);
+      const data = await body(request, trainingScheduleInput);
+      if (!await repo.get<Team>("Teams", clubId, data.teamId)) throw new HttpError(400, "Choose a team from your club.");
+      const schedule: TrainingSchedule = { id: randomUUID(), clubId, ...data, skippedDates: [] };
+      await repo.upsert("TrainingSchedules", clubId, schedule);
+      return json(schedule, 201);
+    }
+    if (resource === "schedules" && id && action === "skip" && (method === "POST" || method === "DELETE")) {
+      requireRole(user, "ClubAdmin", "Coach");
+      const clubId = requireClub(user);
+      const schedule = await repo.get<TrainingSchedule>("TrainingSchedules", clubId, id);
+      if (!schedule) throw new HttpError(404, "Training schedule not found.");
+      const { date } = await body(request, skipOccurrenceInput);
+      if (date < schedule.startDate || date > schedule.endDate || new Date(`${date}T00:00:00.000Z`).getUTCDay() !== schedule.weekday) {
+        throw new HttpError(400, "Choose a date from this schedule.");
+      }
+      if (method === "POST") {
+        const occurrencePlan = (await repo.list<TrainingPlan>("TrainingPlans", clubId)).find((plan) => plan.scheduleId === id && plan.date === date);
+        if (occurrencePlan) throw new HttpError(409, "Remove the planned training before skipping this occurrence.");
+      }
+      const skippedDates = method === "POST"
+        ? [...new Set([...schedule.skippedDates, date])].sort()
+        : schedule.skippedDates.filter((skippedDate) => skippedDate !== date);
+      const updated = { ...schedule, skippedDates };
+      await repo.upsert("TrainingSchedules", clubId, updated);
+      return json(updated);
+    }
+    if (resource === "schedules" && id && method === "PUT") {
+      requireRole(user, "ClubAdmin", "Coach");
+      const clubId = requireClub(user);
+      const current = await repo.get<TrainingSchedule>("TrainingSchedules", clubId, id);
+      if (!current) throw new HttpError(404, "Training schedule not found.");
+      const data = await body(request, trainingScheduleInput);
+      if (!await repo.get<Team>("Teams", clubId, data.teamId)) throw new HttpError(400, "Choose a team from your club.");
+      const updated = { ...current, ...data, skippedDates: current.skippedDates.filter((date) => date >= data.startDate && date <= data.endDate && new Date(`${date}T00:00:00.000Z`).getUTCDay() === data.weekday) };
+      const linkedPlans = (await repo.list<TrainingPlan>("TrainingPlans", clubId)).filter((plan) => plan.scheduleId === id);
+      if (linkedPlans.some((plan) => plan.teamId !== updated.teamId || !isScheduleOccurrence(updated, plan.date) || plan.duration !== updated.duration || plan.startTime !== updated.startTime)) {
+        throw new HttpError(409, "Remove planned sessions that no longer match this schedule before updating it.");
+      }
+      await repo.upsert("TrainingSchedules", clubId, updated);
+      return json(updated);
+    }
+    if (resource === "schedules" && id && method === "DELETE") {
+      requireRole(user, "ClubAdmin", "Coach");
+      const clubId = requireClub(user);
+      const schedule = await repo.get<TrainingSchedule>("TrainingSchedules", clubId, id);
+      if (!schedule) throw new HttpError(404, "Training schedule not found.");
+      const plans = await repo.list<TrainingPlan>("TrainingPlans", clubId);
+      await Promise.all(plans.filter((plan) => plan.scheduleId === id).map(async (plan) => {
+        const { scheduleId: _scheduleId, ...unlinkedPlan } = plan;
+        await repo.upsert("TrainingPlans", clubId, unlinkedPlan);
+      }));
+      await repo.delete("TrainingSchedules", clubId, id);
+      return json({ ok: true });
+    }
     if (resource === "plans" && method === "GET") {
       const clubId = requireClub(user);
       return json(await repo.list<TrainingPlan>("TrainingPlans", clubId));
@@ -306,10 +371,19 @@ export async function handle(request: HttpRequest, context: InvocationContext): 
       const clubId = requireClub(user);
       const team = await repo.get("Teams", clubId, data.teamId);
       if (!team) throw new HttpError(400, "Choose a team from your club.");
+      if (data.scheduleId) {
+        const schedule = await repo.get<TrainingSchedule>("TrainingSchedules", clubId, data.scheduleId);
+        if (!schedule || schedule.teamId !== data.teamId || !isScheduleOccurrence(schedule, data.date) || schedule.duration !== data.duration || data.startTime !== schedule.startTime) {
+          throw new HttpError(400, "The training must match an active occurrence in its weekly schedule.");
+        }
+      }
       const clubExercises = await repo.list<Exercise>("Exercises", clubId);
       const allowedExerciseIds = new Set([...clubExercises.map((exercise) => exercise.id), ...data.customExercises.map((exercise) => exercise.id)]);
       if (data.exerciseIds.some((exerciseId) => !allowedExerciseIds.has(exerciseId))) {
         throw new HttpError(400, "Training plans can only use exercises from your club.");
+      }
+      if (data.scheduleId && (await repo.list<TrainingPlan>("TrainingPlans", clubId)).some((plan) => plan.scheduleId === data.scheduleId && plan.date.slice(0, 10) === data.date)) {
+        throw new HttpError(409, "A training session is already planned for this schedule occurrence.");
       }
       const plan: TrainingPlan = { id: randomUUID(), clubId, ...data };
       await repo.upsert("TrainingPlans", clubId, plan);
@@ -326,9 +400,18 @@ export async function handle(request: HttpRequest, context: InvocationContext): 
         repo.list<Exercise>("Exercises", clubId),
       ]);
       if (!team) throw new HttpError(400, "Choose a team from your club.");
+      if (data.scheduleId) {
+        const schedule = await repo.get<TrainingSchedule>("TrainingSchedules", clubId, data.scheduleId);
+        if (!schedule || schedule.teamId !== data.teamId || !isScheduleOccurrence(schedule, data.date) || schedule.duration !== data.duration || data.startTime !== schedule.startTime) {
+          throw new HttpError(400, "The training must match an active occurrence in its weekly schedule.");
+        }
+      }
       const allowedExerciseIds = new Set([...clubExercises.map((exercise) => exercise.id), ...data.customExercises.map((exercise) => exercise.id)]);
       if (data.exerciseIds.some((exerciseId) => !allowedExerciseIds.has(exerciseId))) {
         throw new HttpError(400, "Training plans can only use exercises from your club.");
+      }
+      if (data.scheduleId && (await repo.list<TrainingPlan>("TrainingPlans", clubId)).some((plan) => plan.id !== id && plan.scheduleId === data.scheduleId && plan.date.slice(0, 10) === data.date)) {
+        throw new HttpError(409, "A training session is already planned for this schedule occurrence.");
       }
       const updated = { ...current, ...data };
       await repo.upsert("TrainingPlans", clubId, updated);

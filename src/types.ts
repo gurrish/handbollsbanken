@@ -15,7 +15,11 @@ export interface Exercise {
 export interface TrainingPlan {
   id: string; clubId: string; teamId: string; title: string; date: string;
   duration: number; exerciseIds: string[]; customExercises?: CustomExercise[];
-  exerciseDurations?: Record<string, number>; notes: string
+  exerciseDurations?: Record<string, number>; notes: string; scheduleId?: string; startTime?: string
+}
+export interface TrainingSchedule {
+  id: string; clubId: string; teamId: string; weekday: number; startTime: string;
+  duration: number; startDate: string; endDate: string; skippedDates: string[]
 }
 export interface CustomExercise {
   id: string; title: string
@@ -26,7 +30,8 @@ export interface TrainingTemplate {
 }
 export interface Bootstrap {
   user: User; clubs: Club[]; teams: Team[]; exercises: Exercise[];
-  plans: TrainingPlan[]; templates: TrainingTemplate[]; requests: JoinRequest[]; users: User[]
+  plans: TrainingPlan[]; templates: TrainingTemplate[]; schedules: TrainingSchedule[];
+  requests: JoinRequest[]; users: User[]
 }
 export interface DiagramItem {
   id: string; type: "player" | "keeper" | "cone" | "goal" | "ball" | "arrow" | "pass" | "movement" | "text";
