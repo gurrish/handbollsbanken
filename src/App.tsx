@@ -40,10 +40,11 @@ export default function App() {
   const [data, setData] = useState<Bootstrap | null>(null);
   const [page, setPage] = useState<Page>(() => {
     const params = new URLSearchParams(window.location.search);
-    return params.has("training") ? "planner" : params.has("exercise") ? "library" : "overview";
+    return params.has("training") || params.has("template") ? "planner" : params.has("exercise") ? "library" : "overview";
   });
   const [sharedTrainingId, setSharedTrainingId] = useState(() => new URLSearchParams(window.location.search).get("training"));
   const [sharedExerciseId, setSharedExerciseId] = useState(() => new URLSearchParams(window.location.search).get("exercise"));
+  const [sharedTemplateId, setSharedTemplateId] = useState(() => new URLSearchParams(window.location.search).get("template"));
   const [loading, setLoading] = useState(true);
   const [signedIn, setSignedIn] = useState(import.meta.env.DEV);
   const [error, setError] = useState("");
@@ -106,8 +107,10 @@ export default function App() {
   }), [data?.exercises, query, ageFilter, categoryFilter, complexityFilter]);
   const sharedTraining = data?.plans.find((plan) => plan.id === sharedTrainingId);
   const sharedExercise = data?.exercises.find((exercise) => exercise.id === sharedExerciseId);
+  const sharedTemplate = data?.templates.find((template) => template.id === sharedTemplateId);
   const pageTitle = sharedTrainingId ? sharedTraining?.title || "Shared training"
-    : sharedExerciseId ? sharedExercise?.title || "Shared exercise"
+    : sharedTemplateId ? sharedTemplate?.title || "Training template"
+      : sharedExerciseId ? sharedExercise?.title || "Shared exercise"
       : navItems.find((item) => item.id === page)?.label || "Overview";
   const club = data?.clubs.find((item) => item.id === data.user.clubId);
 
@@ -131,12 +134,14 @@ export default function App() {
     const url = new URL(window.location.href);
     url.searchParams.delete("training");
     url.searchParams.delete("exercise");
+    url.searchParams.delete("template");
     window.history[replace ? "replaceState" : "pushState"]({}, "", url);
     setSharedTrainingId(null);
     setSharedExerciseId(null);
+    setSharedTemplateId(null);
   };
   const changePage = (value: Page) => {
-    if (sharedTrainingId || sharedExerciseId) clearSharedLink();
+    if (sharedTrainingId || sharedExerciseId || sharedTemplateId) clearSharedLink();
     setPage(value);
     setMobileOpen(false);
   };
@@ -144,8 +149,22 @@ export default function App() {
     const url = new URL(window.location.href);
     url.searchParams.set("training", id);
     url.searchParams.delete("exercise");
+    url.searchParams.delete("template");
     window.history.pushState({}, "", url);
     setSharedTrainingId(id);
+    setSharedExerciseId(null);
+    setSharedTemplateId(null);
+    setEditingTrainingId(edit ? id : null);
+    setMobileOpen(false);
+  };
+  const openTemplate = (id: string, edit = false) => {
+    const url = new URL(window.location.href);
+    url.searchParams.set("template", id);
+    url.searchParams.delete("training");
+    url.searchParams.delete("exercise");
+    window.history.pushState({}, "", url);
+    setSharedTemplateId(id);
+    setSharedTrainingId(null);
     setSharedExerciseId(null);
     setEditingTrainingId(edit ? id : null);
     setMobileOpen(false);
@@ -154,9 +173,11 @@ export default function App() {
     const url = new URL(window.location.href);
     url.searchParams.set("exercise", id);
     url.searchParams.delete("training");
+    url.searchParams.delete("template");
     window.history.pushState({}, "", url);
     setSharedExerciseId(id);
     setSharedTrainingId(null);
+    setSharedTemplateId(null);
     setPage("library");
     setMobileOpen(false);
   };
@@ -186,9 +207,11 @@ export default function App() {
       const params = new URLSearchParams(window.location.search);
       const trainingId = params.get("training");
       const exerciseId = params.get("exercise");
+      const templateId = params.get("template");
       setSharedTrainingId(trainingId);
       setSharedExerciseId(exerciseId);
-      if (trainingId) setPage("planner");
+      setSharedTemplateId(templateId);
+      if (trainingId || templateId) setPage("planner");
       else if (exerciseId) setPage("library");
     };
     window.addEventListener("popstate", handlePopState);
@@ -296,8 +319,21 @@ export default function App() {
             onBack={() => { clearSharedLink(); setPage("planner"); }}
             onShare={() => { if (sharedTraining) void copyTrainingLink(sharedTraining.id); }}
             onSave={async (value) => {
-              if (!sharedTraining) return false;
+              if (!sharedTraining || !("teamId" in value)) return false;
               return act(() => savePlan(value, sharedTraining.id), "Session updated.");
+            }}
+          /> : sharedTemplateId ? <TrainingDetailPage
+            template={sharedTemplate}
+            data={data}
+            exerciseById={exerciseById}
+            canEdit={canEdit}
+            saving={saving}
+            startEditing={editingTrainingId === sharedTemplateId}
+            onBack={() => { clearSharedLink(); setPage("planner"); }}
+            onSchedule={() => { if (sharedTemplate) setScheduleTemplate(sharedTemplate); }}
+            onSave={async (value) => {
+              if (!sharedTemplate || "teamId" in value) return false;
+              return act(() => saveTemplate(value, sharedTemplate.id), "Template updated.");
             }}
           /> : sharedExerciseId ? <ExerciseDetailPage
             exercise={sharedExercise}
@@ -311,16 +347,16 @@ export default function App() {
               await refresh();
               setMessage("Diagram saved to exercise.");
             }}
-          /> : !sharedTrainingId && !sharedExerciseId && page === "overview" && <Overview data={data} clubName={club?.name || "your club"} onNavigate={changePage} />}
-          {!sharedTrainingId && !sharedExerciseId && page === "library" && <LibraryPage
+          /> : !sharedTrainingId && !sharedTemplateId && !sharedExerciseId && page === "overview" && <Overview data={data} clubName={club?.name || "your club"} onNavigate={changePage} />}
+          {!sharedTrainingId && !sharedTemplateId && !sharedExerciseId && page === "library" && <LibraryPage
             exercises={filteredExercises} total={data.exercises.length} query={query} setQuery={setQuery}
             ageFilter={ageFilter} setAgeFilter={setAgeFilter} categoryFilter={categoryFilter} setCategoryFilter={setCategoryFilter}
             complexityFilter={complexityFilter} setComplexityFilter={setComplexityFilter} canEdit={canEdit}
             onCreate={() => setExerciseModal(null)} onOpen={openExercise} onEdit={(exercise) => setExerciseModal(exercise)}
             onDelete={(exercise) => { if (window.confirm(translateText(`Delete “${exercise.title}”? This cannot be undone.`))) void act(() => api(`exercises/${exercise.id}`, { method: "DELETE" }), "Exercise deleted."); }}
           />}
-          {!sharedTrainingId && !sharedExerciseId && page === "planner" && <PlannerPage data={data} exerciseById={exerciseById} canEdit={canEdit} saving={saving} onTeamsChange={(teamIds) => act(() => api("users/me/teams", { method: "PATCH", body: JSON.stringify({ teamIds }) }), "Team preferences saved.")} onCreate={() => setPlanModal(null)} onCreateTemplate={() => setTemplateModal(null)} onEdit={(plan) => openTraining(plan.id, true)} onOpen={openTraining} onShare={(id) => void copyTrainingLink(id)} onSchedule={(template) => setScheduleTemplate(template)} onEditTemplate={(template) => setTemplateModal(template)} onDeleteTemplate={(template) => { if (window.confirm(translateText(`Delete “${template.title}”?`))) void act(() => api(`templates/${template.id}`, { method: "DELETE" }), "Template deleted."); }} onDelete={(plan) => { if (window.confirm(translateText(`Delete “${plan.title}”?`))) void act(() => api(`plans/${plan.id}`, { method: "DELETE" }), "Session deleted."); }} />}
-          {!sharedTrainingId && !sharedExerciseId && page === "admin" && <AdminPage data={data} isGlobalAdmin={isGlobalAdmin} saving={saving} onCreateClub={() => void act(() => api("clubs", { method: "POST", body: JSON.stringify({ name: clubName }) }), "Club created.")} onRenameClub={(club) => { const name = window.prompt(translateText("Rename club"), club.name)?.trim(); if (name && name !== club.name) void act(() => api(`clubs/${club.id}`, { method: "PUT", body: JSON.stringify({ name }) }), "Club name updated."); }} onClubName={setClubName} clubName={clubName} onCreateTeam={() => void act(() => api("teams", { method: "POST", body: JSON.stringify({ name: teamName, ageGroup: teamAge }) }), "Team created.")} onEditTeam={(team) => setTeamModal(team)} onTeamName={setTeamName} teamName={teamName} teamAge={teamAge} onTeamAge={setTeamAge} onDecision={(request, status) => void act(() => api(`join-requests/${request.id}`, { method: "PATCH", body: JSON.stringify({ status }) }), status === "approved" ? "Coach approved." : "Request declined.")} onRoleChange={(userId, role) => void act(() => api(`users/${userId}/role`, { method: "PATCH", body: JSON.stringify({ role }) }), "Role updated.")} />}
+          {!sharedTrainingId && !sharedTemplateId && !sharedExerciseId && page === "planner" && <PlannerPage data={data} exerciseById={exerciseById} canEdit={canEdit} saving={saving} onTeamsChange={(teamIds) => act(() => api("users/me/teams", { method: "PATCH", body: JSON.stringify({ teamIds }) }), "Team preferences saved.")} onCreate={() => setPlanModal(null)} onCreateTemplate={() => setTemplateModal(null)} onEdit={(plan) => openTraining(plan.id, true)} onOpen={openTraining} onShare={(id) => void copyTrainingLink(id)} onSchedule={(template) => setScheduleTemplate(template)} onOpenTemplate={openTemplate} onEditTemplate={(template) => openTemplate(template.id, true)} onDeleteTemplate={(template) => { if (window.confirm(translateText(`Delete “${template.title}”?`))) void act(() => api(`templates/${template.id}`, { method: "DELETE" }), "Template deleted."); }} onDelete={(plan) => { if (window.confirm(translateText(`Delete “${plan.title}”?`))) void act(() => api(`plans/${plan.id}`, { method: "DELETE" }), "Session deleted."); }} />}
+          {!sharedTrainingId && !sharedTemplateId && !sharedExerciseId && page === "admin" && <AdminPage data={data} isGlobalAdmin={isGlobalAdmin} saving={saving} onCreateClub={() => void act(() => api("clubs", { method: "POST", body: JSON.stringify({ name: clubName }) }), "Club created.")} onRenameClub={(club) => { const name = window.prompt(translateText("Rename club"), club.name)?.trim(); if (name && name !== club.name) void act(() => api(`clubs/${club.id}`, { method: "PUT", body: JSON.stringify({ name }) }), "Club name updated."); }} onClubName={setClubName} clubName={clubName} onCreateTeam={() => void act(() => api("teams", { method: "POST", body: JSON.stringify({ name: teamName, ageGroup: teamAge }) }), "Team created.")} onEditTeam={(team) => setTeamModal(team)} onTeamName={setTeamName} teamName={teamName} teamAge={teamAge} onTeamAge={setTeamAge} onDecision={(request, status) => void act(() => api(`join-requests/${request.id}`, { method: "PATCH", body: JSON.stringify({ status }) }), status === "approved" ? "Coach approved." : "Request declined.")} onRoleChange={(userId, role) => void act(() => api(`users/${userId}/role`, { method: "PATCH", body: JSON.stringify({ role }) }), "Role updated.")} />}
         </div>
       </main>
       {exerciseModal !== false && <ExerciseForm exercise={exerciseModal || undefined} canEdit={canEdit} saving={saving} onClose={() => setExerciseModal(false)} onSave={async (value) => {
@@ -500,41 +536,42 @@ function ExerciseDetailPage({ exercise, canEdit, onBack, onShare, onEdit, onSave
   </div>);
 }
 
-function TrainingDetailPage({ plan, data, exerciseById, canEdit, saving, startEditing, onBack, onShare, onSave }: { plan?: TrainingPlan; data: Bootstrap; exerciseById: Map<string, Exercise>; canEdit: boolean; saving: boolean; startEditing: boolean; onBack: () => void; onShare: () => void; onSave: (value: Omit<TrainingPlan, "id" | "clubId">) => Promise<boolean> }) {
+function TrainingDetailPage({ plan, template, data, exerciseById, canEdit, saving, startEditing, onBack, onShare, onSchedule, onSave }: { plan?: TrainingPlan; template?: TrainingTemplate; data: Bootstrap; exerciseById: Map<string, Exercise>; canEdit: boolean; saving: boolean; startEditing: boolean; onBack: () => void; onShare?: () => void; onSchedule?: () => void; onSave: (value: PlanFormValue) => Promise<boolean> }) {
   const { locale } = useLocale();
   const [editing, setEditing] = useState(startEditing);
   useEffect(() => setEditing(startEditing), [startEditing]);
+  const training = plan || template;
   const team = plan && data.teams.find((item) => item.id === plan.teamId);
-  const exercises = plan?.exerciseIds.map((id) => ({
+  const exercises = training?.exerciseIds.map((id) => ({
     id,
     exercise: exerciseById.get(id),
-    custom: plan.customExercises?.find((item) => item.id === id),
+    custom: training.customExercises?.find((item) => item.id === id),
   })) || [];
   return localize(<div className="content-page training-detail">
     <div className="page-intro">
-      <div><span className="section-kicker">SHARED TRAINING · CLUB MEMBERS</span><h1>{plan?.title || "Training unavailable"}</h1><p>{plan ? `${dateLabel(plan.date, undefined, locale)} · ${team?.name || "Team"} · ${plan.duration} min` : "This training may have been removed, or you may not have access to its club."}</p></div>
-      <div className="training-detail-actions training-detail-controls"><Button variant="secondary" onClick={onBack}><ArrowLeft size={15} /> Training planner</Button>{plan && <>{canEdit && <Button variant="secondary" onClick={() => setEditing((value) => !value)}><Pencil size={15} />{editing ? "Cancel edit" : "Edit training"}</Button>}<Button variant="secondary" onClick={onShare}><Copy size={15} /> Copy link</Button><Button onClick={() => window.print()}><Printer size={15} /> Export PDF</Button></>}</div>
+      <div><span className="section-kicker">{template ? "TRAINING TEMPLATE" : "SHARED TRAINING · CLUB MEMBERS"}</span><h1>{training?.title || "Training unavailable"}</h1><p>{plan ? `${dateLabel(plan.date, undefined, locale)} · ${team?.name || "Team"} · ${plan.duration} min` : template ? `Training template · ${template.duration} min` : "This training may have been removed, or you may not have access to its club."}</p></div>
+      <div className="training-detail-actions training-detail-controls"><Button variant="secondary" onClick={onBack}><ArrowLeft size={15} />{template ? "Training templates" : "Training planner"}</Button>{training && <>{canEdit && <Button variant="secondary" onClick={() => setEditing((value) => !value)}><Pencil size={15} />{editing ? "Cancel edit" : template ? "Edit template" : "Edit training"}</Button>}{template && canEdit && <Button onClick={onSchedule}><CalendarDays size={14} /> Add to calendar</Button>}{onShare && <Button variant="secondary" onClick={onShare}><Copy size={15} /> Copy link</Button>}<Button onClick={() => window.print()}><Printer size={15} /> Export PDF</Button></>}</div>
     </div>
-    {plan && (editing && canEdit
-      ? <PlanForm inline plan={plan} teams={data.teams} exercises={data.exercises} saving={saving} onClose={() => setEditing(false)} onSave={async (value) => {
-        if ("teamId" in value && "date" in value && await onSave(value)) setEditing(false);
+    {training && (editing && canEdit
+      ? <PlanForm mode={template ? "template" : "plan"} inline plan={plan} template={template} teams={data.teams} exercises={data.exercises} saving={saving} onClose={() => setEditing(false)} onSave={async (value) => {
+        if (await onSave(value)) setEditing(false);
       }} />
       : <div className="training-print-content">
         <Card className="training-detail-card">
-          <div className="training-detail-meta"><Badge>{team?.ageGroup || "Team"}</Badge><span data-no-translate={Boolean(team)}>{team?.name || "Team"}</span><span><CalendarDays size={14} />{dateLabel(plan.date, undefined, locale)}</span><span><Clock3 size={14} />{plan.duration} min</span></div>
-          <PlanTimeline plan={plan} exerciseById={exerciseById} />
-          {plan.notes && <div className="training-coach-notes"><span className="section-kicker">COACH’S NOTES</span><p data-no-translate>{plan.notes}</p></div>}
+          <div className="training-detail-meta">{plan && <><Badge>{team?.ageGroup || "Team"}</Badge><span data-no-translate={Boolean(team)}>{team?.name || "Team"}</span><span><CalendarDays size={14} />{dateLabel(plan.date, undefined, locale)}</span></>}{template && <Badge>Training template</Badge>}<span><Clock3 size={14} />{training.duration} min</span></div>
+          <PlanTimeline plan={training} exerciseById={exerciseById} />
+          {training.notes && <div className="training-coach-notes"><span className="section-kicker">COACH’S NOTES</span><p data-no-translate>{training.notes}</p></div>}
         </Card>
         <div className="training-exercises">
           <div className="section-heading"><div><span className="section-kicker">SESSION FLOW</span><h2>{exercises.length} exercises</h2></div></div>
-          {exercises.length ? exercises.map(({ id, exercise, custom }, index) => <Card className="training-exercise" key={id}><span className="order-index">{String(index + 1).padStart(2, "0")}</span><div className="training-exercise-copy"><strong data-no-translate>{exercise?.title || custom?.title || "Exercise"}</strong><p data-no-translate>{exercise?.description || (custom ? "Free-text exercise." : "No exercise notes.")}</p>{exercise && <div className="exercise-tags">{exercise.tags.map((tag) => <span key={tag} data-no-translate>#{tag}</span>)}</div>}{hasDiagram(exercise) && <div className="training-exercise-diagram"><DiagramEditor key={`${id}-diagram`} value={exercise.diagramJson} readOnly /></div>}</div><Badge>{exerciseMinutes(plan, id, index)} min</Badge></Card>) : <Card className="training-exercise"><p>This session has no exercises yet.</p></Card>}
+          {exercises.length ? exercises.map(({ id, exercise, custom }, index) => <Card className="training-exercise" key={id}><span className="order-index">{String(index + 1).padStart(2, "0")}</span><div className="training-exercise-copy"><strong data-no-translate>{exercise?.title || custom?.title || "Exercise"}</strong><p data-no-translate>{exercise?.description || (custom ? "Free-text exercise." : "No exercise notes.")}</p>{exercise && <div className="exercise-tags">{exercise.tags.map((tag) => <span key={tag} data-no-translate>#{tag}</span>)}</div>}{hasDiagram(exercise) && <div className="training-exercise-diagram"><DiagramEditor key={`${id}-diagram`} value={exercise.diagramJson} readOnly /></div>}</div><Badge>{exerciseMinutes(training, id, index)} min</Badge></Card>) : <Card className="training-exercise"><p>This session has no exercises yet.</p></Card>}
         </div>
-        <p className="training-sharing-note">This link is for signed-in members with access to this club. It won’t make the training public.</p>
+        {plan && <p className="training-sharing-note">This link is for signed-in members with access to this club. It won’t make the training public.</p>}
       </div>)}
   </div>);
 }
 
-function PlannerPage({ data, exerciseById, canEdit, saving, onTeamsChange, onCreate, onCreateTemplate, onEdit, onOpen, onShare, onSchedule, onEditTemplate, onDeleteTemplate, onDelete }: { data: Bootstrap; exerciseById: Map<string, Exercise>; canEdit: boolean; saving: boolean; onTeamsChange: (teamIds: string[]) => Promise<boolean>; onCreate: () => void; onCreateTemplate: () => void; onEdit: (plan: TrainingPlan) => void; onOpen: (id: string) => void; onShare: (id: string) => void; onSchedule: (template: TrainingTemplate) => void; onEditTemplate: (template: TrainingTemplate) => void; onDeleteTemplate: (template: TrainingTemplate) => void; onDelete: (plan: TrainingPlan) => void }) {
+function PlannerPage({ data, exerciseById, canEdit, saving, onTeamsChange, onCreate, onCreateTemplate, onEdit, onOpen, onShare, onSchedule, onOpenTemplate, onEditTemplate, onDeleteTemplate, onDelete }: { data: Bootstrap; exerciseById: Map<string, Exercise>; canEdit: boolean; saving: boolean; onTeamsChange: (teamIds: string[]) => Promise<boolean>; onCreate: () => void; onCreateTemplate: () => void; onEdit: (plan: TrainingPlan) => void; onOpen: (id: string) => void; onShare: (id: string) => void; onSchedule: (template: TrainingTemplate) => void; onOpenTemplate: (id: string, edit?: boolean) => void; onEditTemplate: (template: TrainingTemplate) => void; onDeleteTemplate: (template: TrainingTemplate) => void; onDelete: (plan: TrainingPlan) => void }) {
   const [selectedTeamIds, setSelectedTeamIds] = useState<string[]>(() => data.user.interestedTeamIds ?? data.teams.map((team) => team.id));
   useEffect(() => {
     setSelectedTeamIds(data.user.interestedTeamIds ?? data.teams.map((team) => team.id));
@@ -543,13 +580,13 @@ function PlannerPage({ data, exerciseById, canEdit, saving, onTeamsChange, onCre
     .filter((plan) => selectedTeamIds.includes(plan.teamId))
     .sort((a, b) => a.date.localeCompare(b.date));
   return localize(<div className="content-page">
-    <div className="page-intro"><div><span className="section-kicker">MAKE TIME FOR THE GOOD STUFF</span><h1>Training planner</h1><p>Build a practice that flows — from first whistle to final stretch.</p></div>{canEdit && <div className="planner-actions"><Button variant="secondary" onClick={onCreateTemplate}><Plus size={16} /> Create reusable training</Button><Button onClick={onCreate}><Plus size={16} /> Plan a session</Button></div>}</div>
+    <div className="page-intro"><div><span className="section-kicker">MAKE TIME FOR THE GOOD STUFF</span><h1>Training planner</h1><p>Build a practice that flows — from first whistle to final stretch.</p></div>{canEdit && <div className="planner-actions"><Button variant="secondary" onClick={onCreateTemplate}><Plus size={16} /> Create training template</Button><Button onClick={onCreate}><Plus size={16} /> Plan a session</Button></div>}</div>
     <Card className="team-filter">
       <div><strong>Teams I’m interested in</strong><span>Only trainings for selected teams are shown.</span></div>
       <div className="team-filter-options">{data.teams.map((team) => <label key={team.id}><input type="checkbox" checked={selectedTeamIds.includes(team.id)} onChange={(event) => setSelectedTeamIds((current) => event.target.checked ? [...current, team.id] : current.filter((id) => id !== team.id))} /><span data-no-translate>{team.name}</span><small>{team.ageGroup}</small></label>)}</div>
       <Button variant="secondary" disabled={saving || !data.teams.length || (data.user.interestedTeamIds ?? data.teams.map((team) => team.id)).join("|") === selectedTeamIds.join("|")} onClick={() => void onTeamsChange(selectedTeamIds)}>{saving ? "Saving…" : "Save team selection"}</Button>
     </Card>
-    {data.templates.length > 0 && <section className="template-section"><div className="section-heading"><div><span className="section-kicker">READY-TO-USE PRACTICES</span><h2>Reusable trainings</h2></div></div><div className="template-list">{data.templates.map((template) => <TemplateCard key={template.id} template={template} exerciseById={exerciseById} canEdit={canEdit} onSchedule={() => onSchedule(template)} onEdit={() => onEditTemplate(template)} onDelete={() => onDeleteTemplate(template)} />)}</div></section>}
+    {data.templates.length > 0 && <section className="template-section"><div className="section-heading"><div><span className="section-kicker">READY-TO-USE PRACTICES</span><h2>Training templates</h2></div></div><div className="template-list">{data.templates.map((template) => <TemplateCard key={template.id} template={template} exerciseById={exerciseById} canEdit={canEdit} onOpen={() => onOpenTemplate(template.id)} onSchedule={() => onSchedule(template)} onEdit={() => onEditTemplate(template)} onDelete={() => onDeleteTemplate(template)} />)}</div></section>}
     <div className="planner-summary"><div><div className="summary-icon"><CalendarDays size={18} /></div><span><strong>{sorted.length} sessions</strong><small>for selected teams</small></span></div><div><div className="summary-icon green-summary"><Clock3 size={18} /></div><span><strong>{sorted.reduce((total, plan) => total + plan.duration, 0)} min</strong><small>court time scheduled</small></span></div><div><div className="summary-icon peach-summary"><Users size={18} /></div><span><strong>{selectedTeamIds.length} teams</strong><small>selected</small></span></div></div>
     {sorted.length ? <div className="plan-list">{sorted.map((plan, index) => <PlanCard key={plan.id} plan={plan} data={data} exerciseById={exerciseById} canEdit={canEdit} index={index} onEdit={() => onEdit(plan)} onOpen={() => onOpen(plan.id)} onShare={() => onShare(plan.id)} onDelete={() => onDelete(plan)} />)}</div> : <Card><EmptyState icon={CalendarDays} title={selectedTeamIds.length ? "No sessions on the calendar" : "No teams selected"} text={selectedTeamIds.length ? "Put together a practice and make the most of your court time." : "Select one or more teams above to see their planned trainings."} action={selectedTeamIds.length ? "Plan your first session" : "Choose teams"} onClick={selectedTeamIds.length ? onCreate : () => document.querySelector(".team-filter")?.scrollIntoView({ behavior: "smooth", block: "center" })} /></Card>}
   </div>);
@@ -559,8 +596,8 @@ function PlanCard({ plan, data, exerciseById, canEdit, index, onEdit, onOpen, on
   const team = data.teams.find((item) => item.id === plan.teamId);
   return localize(<Card className="plan-card"><div className="plan-date"><span>{dateLabel(plan.date, { month: "short" }, locale).toUpperCase()}</span><strong>{new Date(`${plan.date.slice(0, 10)}T12:00:00`).getDate()}</strong><small>{dateLabel(plan.date, { weekday: "short" }, locale)}</small></div><div className="plan-main"><div className="plan-heading"><div><div className="plan-teamline"><Badge tone={index % 2 ? "green" : "blue"}>{team?.ageGroup || "Team"}</Badge><span data-no-translate={Boolean(team)}>{team?.name || "Team"}</span></div><h3 data-no-translate>{plan.title}</h3></div><span className="plan-time"><Clock3 size={14} />{plan.duration} min</span></div><PlanTimeline plan={plan} exerciseById={exerciseById} />{plan.notes && <p className="plan-notes" data-no-translate>{plan.notes}</p>}</div><div className="plan-actions"><button onClick={onOpen}>Open</button><button onClick={onShare}><Share2 size={13} /> Share</button>{canEdit && <><button onClick={onEdit}>Edit</button><button onClick={onDelete}>Delete</button></>}</div></Card>);
 }
-function TemplateCard({ template, exerciseById, canEdit, onSchedule, onEdit, onDelete }: { template: TrainingTemplate; exerciseById: Map<string, Exercise>; canEdit: boolean; onSchedule: () => void; onEdit: () => void; onDelete: () => void }) {
-  return localize(<Card className="template-card"><div className="template-card-heading"><strong data-no-translate>{template.title}</strong><Badge>{template.duration} min</Badge></div><PlanTimeline plan={template} exerciseById={exerciseById} />{template.notes && <p className="plan-notes" data-no-translate>{template.notes}</p>}<div className="template-actions">{canEdit && <><Button onClick={onSchedule}><CalendarDays size={14} /> Add to calendar</Button><Button variant="ghost" onClick={onEdit}>Edit</Button><Button variant="ghost" onClick={onDelete}>Delete</Button></>}</div></Card>);
+function TemplateCard({ template, exerciseById, canEdit, onOpen, onSchedule, onEdit, onDelete }: { template: TrainingTemplate; exerciseById: Map<string, Exercise>; canEdit: boolean; onOpen: () => void; onSchedule: () => void; onEdit: () => void; onDelete: () => void }) {
+  return localize(<Card className="template-card"><div className="template-card-heading"><strong data-no-translate>{template.title}</strong><Badge>{template.duration} min</Badge></div><PlanTimeline plan={template} exerciseById={exerciseById} /><div className="template-actions"><Button variant="secondary" onClick={onOpen}>Open</Button>{canEdit && <><Button onClick={onSchedule}><CalendarDays size={14} /> Add to calendar</Button><Button variant="ghost" onClick={onEdit}>Edit</Button><Button variant="ghost" onClick={onDelete}>Delete</Button></>}</div></Card>);
 }
 function PlanTimeline({ plan, exerciseById }: { plan: Pick<TrainingPlan, "exerciseIds" | "duration" | "exerciseDurations"> & { customExercises?: TrainingPlan["customExercises"] }; exerciseById: Map<string, Exercise> }) {
   let elapsed = 0;
@@ -655,7 +692,7 @@ function PlanForm({ mode = "plan", plan, template, teams = [], exercises, saving
     if (mode === "plan") void onSave({ ...content, teamId, date });
     else void onSave(content);
   }}>
-    <p className="modal-lead">{mode === "template" ? "Save a reusable training and schedule copies for any team and date." : "Build or adjust this session here, then save it to the calendar."}</p>
+    <p className="modal-lead">{mode === "template" ? "Save a training template and schedule copies for any team and date." : "Build or adjust this session here, then save it to the calendar."}</p>
     <Field label="Session name"><Input required minLength={2} maxLength={100} autoFocus value={title} onChange={(event) => setTitle(event.target.value)} placeholder="e.g. Fast breaks & finishing" /></Field>
     {mode === "plan" && <div className="form-row">
       <Field label="Team"><Select required value={teamId} onChange={(event) => setTeamId(event.target.value)}><option value="">Choose team…</option>{teams.map((team) => <option key={team.id} value={team.id}>{team.name} · {team.ageGroup}</option>)}</Select></Field>
@@ -691,14 +728,14 @@ function PlanForm({ mode = "plan", plan, template, teams = [], exercises, saving
     <div className="modal-actions"><Button type="button" variant="ghost" onClick={onClose}>{inline ? "Cancel edit" : "Cancel"}</Button><Button type="submit" disabled={saving || (mode === "plan" && !teams.length) || sessionDuration < 15 || sessionDuration > 300}>{saving ? "Saving…" : mode === "template" ? (template ? "Save template" : "Create template") : plan ? "Save changes" : "Save session"} <ArrowUpRight size={15} /></Button></div>
     {mode === "plan" && !teams.length && <p className="form-error">Ask a club admin to add a team before scheduling a session.</p>}
   </form>;
-  return localize(inline ? <Card className="training-editor-card">{form}</Card> : <Modal title={mode === "template" ? (template ? "Edit reusable training" : "Create reusable training") : plan ? "Edit training session" : "Plan a session"} onClose={onClose} wide>{form}</Modal>);
+  return localize(inline ? <Card className="training-editor-card">{form}</Card> : <Modal title={mode === "template" ? (template ? "Edit training template" : "Create training template") : plan ? "Edit training session" : "Plan a session"} onClose={onClose} wide>{form}</Modal>);
 }
 
 function ScheduleTemplateForm({ template, teams, saving, onClose, onSave }: { template: TrainingTemplate; teams: Bootstrap["teams"]; saving: boolean; onClose: () => void; onSave: (value: { teamId: string; date: string }) => Promise<void> }) {
   const [teamId, setTeamId] = useState(teams[0]?.id || "");
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
-  return localize(<Modal title="Add reusable training to calendar" onClose={onClose}><form className="modal-form" onSubmit={(event) => { event.preventDefault(); void onSave({ teamId, date }); }}>
-    <p className="modal-lead"><strong data-no-translate>{template.title}</strong> · {template.duration} min. This creates a scheduled copy; the reusable training stays unchanged.</p>
+  return localize(<Modal title="Add training template to calendar" onClose={onClose}><form className="modal-form" onSubmit={(event) => { event.preventDefault(); void onSave({ teamId, date }); }}>
+    <p className="modal-lead"><strong data-no-translate>{template.title}</strong> · {template.duration} min. This creates a scheduled copy; the training template stays unchanged.</p>
     <Field label="Team"><Select required value={teamId} onChange={(event) => setTeamId(event.target.value)}><option value="">Choose team…</option>{teams.map((team) => <option key={team.id} value={team.id}>{team.name} · {team.ageGroup}</option>)}</Select></Field>
     <Field label="Date"><Input type="date" required value={date} onChange={(event) => setDate(event.target.value)} /></Field>
     <div className="modal-actions"><Button type="button" variant="ghost" onClick={onClose}>Cancel</Button><Button type="submit" disabled={saving || !teams.length}>{saving ? "Saving…" : "Add to calendar"} <CalendarDays size={15} /></Button></div>

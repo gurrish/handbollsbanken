@@ -2,7 +2,7 @@
 
 A mobile-first handball practice planner for a small number of clubs. Coaches can curate a shared exercise library, build ordered training plans and draw reusable court diagrams. Each club's teams, members, exercises and plans are isolated from other clubs.
 
-The planner lets coaches select searchable library exercises or add free-text exercises, set each exercise's duration, reorder a session and review the resulting elapsed-time timeline. Sessions open in a detail and sharing view where coaches can edit them in place. Coaches can also save reusable training templates and schedule copies for different teams and dates; changing a scheduled copy does not change its template. Members can choose which club teams they follow to filter the training planner, and club admins can edit team names and age groups.
+The planner lets coaches select searchable library exercises or add free-text exercises, set each exercise's duration, reorder a session and review the resulting elapsed-time timeline. Sessions and training templates open in a full-page detail view with exercise drawings; coaches can edit them in place. Coaches can schedule copies of a training template for different teams and dates; changing a scheduled copy does not change its template. Members can choose which club teams they follow to filter the training planner, and club admins can edit team names and age groups.
 
 The interface supports Swedish and English. Swedish is selected by default; use the language selector in the app to switch languages. Your choice is saved on the device.
 
@@ -11,7 +11,7 @@ The interface supports Swedish and English. Swedish is selected by default; use 
 - React, TypeScript and Vite; Tailwind CSS utilities, shadcn-style reusable UI primitives, and React-Konva.
 - Progressive Web App support with an installable manifest and automatic service-worker updates.
 - Azure Static Web Apps with its integrated Azure Functions API (no separately managed web server).
-- Azure Table Storage for clubs, users, membership requests, teams, exercises, scheduled plans and reusable training templates. Diagram JSON is stored in a private Azure Blob container.
+- Azure Table Storage for clubs, users, membership requests, teams, exercises, scheduled plans and training templates. Diagram JSON is stored in a private Azure Blob container.
 - Static Web Apps built-in Microsoft Entra ID authentication. The API derives the signed-in identity from the Static Web Apps principal and enforces club membership and roles.
 - Bicep provisions the Static Web App, Storage Account and Application Insights. The managed Static Web Apps API uses a storage connection string in its server-side app settings because managed APIs don't support managed identity. Shared-key access is enabled on the storage account; never expose or commit the key.
 

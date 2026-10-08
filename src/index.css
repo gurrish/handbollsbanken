@@ -180,7 +180,7 @@ select.field { padding-right: 25px; cursor: pointer; }
 .template-list { display: grid; grid-template-columns: repeat(auto-fit,minmax(250px,1fr)); gap: 11px; }
 .template-card { display: flex; flex-direction: column; gap: 9px; padding: 14px; }
 .template-card-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; color: #38445b; font-size: 11px; }
-.template-actions { display: flex; align-items: center; gap: 5px; border-top: 1px solid #f0f2f6; padding-top: 8px; }
+.template-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; border-top: 1px solid #f0f2f6; padding-top: 8px; }
 .custom-exercise-input { display: flex; gap: 8px; }
 .custom-exercise-input .field { min-width: 0; flex: 1; }
 .training-editor-card { padding: 20px; }
