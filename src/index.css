@@ -275,8 +275,9 @@ select.field { padding-right: 25px; cursor: pointer; }
   .training-exercises > .section-heading h2 { color: #202a40; }
   .training-exercise-diagram { break-inside: avoid; margin-top: 3mm; }
   .training-exercise-diagram, .training-exercise-diagram .canvas-wrap, .training-exercise-diagram .diagram-editor { width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; }
-  .training-exercise-diagram .canvas-wrap { overflow: hidden; padding: 2mm; }
-  .training-exercise-diagram .court-canvas { max-width: 100%; }
+  .training-exercise-diagram .canvas-wrap { overflow: visible; padding: 2mm; }
+  .training-exercise-diagram .court-canvas { position: relative; width: 100% !important; height: auto !important; aspect-ratio: 620 / 360; }
+  .training-exercise-diagram .court-canvas canvas { width: 100% !important; height: 100% !important; }
   .exercise-detail-card, .exercise-diagram-card { break-inside: avoid; border: 1px solid #d7dce5; border-radius: 0; box-shadow: none; }
   .exercise-detail-card { gap: 3mm; padding: 5mm; }
   .exercise-detail-card h2 { color: #202a40; font-size: 15pt; }
