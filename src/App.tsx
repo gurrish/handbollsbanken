@@ -291,7 +291,7 @@ export default function App() {
               </form>
             )}
           </Card>
-          <div className="profile-note"><span>Signed in as {data.user.email}</span><ProfileEditor name={data.user.name} email={data.user.email} saving={saving} onSave={(name) => act(() => api("users/me/profile", { method: "PATCH", body: JSON.stringify({ name }) }), "Display name updated.")} /></div>
+          <div className="profile-note"><span>Signed in as {data.user.email}</span><ProfileEditor name={data.user.name} email={data.user.email} saving={saving} promptOnMount={needsDisplayName(data.user.name, data.user.email)} onSave={(name) => act(() => api("users/me/profile", { method: "PATCH", body: JSON.stringify({ name }) }), "Display name updated.")} /></div>
         </div>
         <p className="onboarding-foot">MADE FOR THE LOVE OF HANDBALL <span>·</span> {new Date().getFullYear()}</p>
         {message && <Toast message={message} />}
@@ -322,7 +322,7 @@ export default function App() {
           <a className="sidebar-help" href="https://github.com/gurrish/handbollsbanken/issues/new" target="_blank" rel="noopener noreferrer"><div className="help-icon"><CircleHelp size={18} /></div><div><strong>Experience issues?</strong><span>Report a bug</span></div><ArrowUpRight size={15} /></a>
           <div className="user-profile">
             <div className="user-avatar">{data.user.name.slice(0, 1).toUpperCase()}</div>
-            <div className="profile-copy"><strong data-no-translate>{data.user.name}</strong><span>{data.user.roles.map((role) => roleLabel[role]).join(", ")}</span><ProfileEditor name={data.user.name} email={data.user.email} saving={saving} onSave={(name) => act(() => api("users/me/profile", { method: "PATCH", body: JSON.stringify({ name }) }), "Display name updated.")} /></div>
+            <div className="profile-copy"><strong data-no-translate>{data.user.name}</strong><span>{data.user.roles.map((role) => roleLabel[role]).join(", ")}</span><ProfileEditor name={data.user.name} email={data.user.email} saving={saving} promptOnMount={needsDisplayName(data.user.name, data.user.email)} onSave={(name) => act(() => api("users/me/profile", { method: "PATCH", body: JSON.stringify({ name }) }), "Display name updated.")} /></div>
             <button className="logout-icon" aria-label="Sign out" onClick={(event) => { event.stopPropagation(); logout(); }}><LogOut size={16} /></button>
           </div>
         </div>
@@ -457,20 +457,28 @@ function ErrorBanner({ message, onClose }: { message: string; onClose?: () => vo
 }
 function Toast({ message }: { message: string }) { return localize(<div className="toast"><Check size={16} />{message}</div>); }
 
-function ProfileEditor({ name, email, saving, onSave }: { name: string; email: string; saving: boolean; onSave: (name: string) => Promise<boolean> }) {
-  const [open, setOpen] = useState(false);
-  const [displayName, setDisplayName] = useState(name);
+function needsDisplayName(name: string, email: string) {
+  const normalizedName = name.trim().toLocaleLowerCase();
+  const normalizedEmail = email.trim().toLocaleLowerCase();
+  return normalizedName === normalizedEmail || normalizedName === normalizedEmail.split("@")[0];
+}
+
+function ProfileEditor({ name, email, saving, promptOnMount = false, onSave }: { name: string; email: string; saving: boolean; promptOnMount?: boolean; onSave: (name: string) => Promise<boolean> }) {
+  const [open, setOpen] = useState(promptOnMount);
+  const [showSetupPrompt, setShowSetupPrompt] = useState(promptOnMount);
+  const [displayName, setDisplayName] = useState(promptOnMount ? "" : name);
+  const close = () => { setOpen(false); setShowSetupPrompt(false); };
   return localize(<>
-    <button className="profile-edit" type="button" onClick={() => { setDisplayName(name); setOpen(true); }}><Pencil size={12} /> Edit display name</button>
-    {open && <Modal title="Edit display name" onClose={() => setOpen(false)}>
+    <button className="profile-edit" type="button" onClick={() => { setDisplayName(name); setShowSetupPrompt(false); setOpen(true); }}><Pencil size={12} /> Edit display name</button>
+    {open && <Modal title={showSetupPrompt ? "Add a display name" : "Edit display name"} onClose={close}>
       <form className="modal-form" onSubmit={async (event) => {
         event.preventDefault();
-        if (await onSave(displayName.trim())) setOpen(false);
+        if (await onSave(displayName.trim())) close();
       }}>
-        <p className="modal-lead">Choose the name other club members will see. Your sign-in email will not change.</p>
+        <p className="modal-lead">{showSetupPrompt ? "We couldn’t find your name in your sign-in profile. Add the name other club members should see." : "Choose the name other club members will see. Your sign-in email will not change."}</p>
         <Field label="Display name"><Input autoFocus required minLength={2} maxLength={80} value={displayName} onChange={(event) => setDisplayName(event.target.value)} /></Field>
         <Field label="Sign-in email"><Input value={email} readOnly /></Field>
-        <div className="modal-actions"><Button type="button" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button><Button type="submit" disabled={saving || displayName.trim().length < 2}>{saving ? "Saving…" : "Save display name"}</Button></div>
+        <div className="modal-actions">{!showSetupPrompt && <Button type="button" variant="ghost" onClick={close}>Cancel</Button>}<Button type="submit" disabled={saving || displayName.trim().length < 2}>{saving ? "Saving…" : "Save display name"}</Button></div>
       </form>
     </Modal>}
   </>);

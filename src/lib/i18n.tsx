@@ -93,6 +93,8 @@ const translations: Record<string, string> = {
   "SESSION FLOW · SET DURATION AND REORDER": "TRÄNINGENS UPPLÄGG · ANGE TID OCH ÄNDRA ORDNING",
   "The total exercise time must be between 15 and 300 minutes.": "Den totala övningstiden måste vara mellan 15 och 300 minuter.",
   "Edit display name": "Ändra visningsnamn",
+  "Add a display name": "Lägg till ett visningsnamn",
+  "We couldn’t find your name in your sign-in profile. Add the name other club members should see.": "Vi hittade inte ditt namn i din inloggningsprofil. Lägg till namnet som andra klubbmedlemmar ska se.",
   "Choose the name other club members will see. Your sign-in email will not change.": "Välj namnet som andra klubbmedlemmar ser. Din inloggningsadress ändras inte.",
   "Display name": "Visningsnamn",
   "Sign-in email": "Inloggningsadress",
