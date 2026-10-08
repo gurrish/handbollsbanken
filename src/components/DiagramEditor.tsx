@@ -27,6 +27,8 @@ const initialItems: DiagramItem[] = [
 ];
 
 export default function DiagramEditor({ value, onSave, readOnly = false }: { value: string; onSave?: (value: string) => Promise<void>; readOnly?: boolean }) {
+  const [canvasWidth, setCanvasWidth] = useState(620);
+  const canvasWrapRef = useRef<HTMLDivElement>(null);
   const [items, setItems] = useState<DiagramItem[]>(() => {
     try { return value ? JSON.parse(value) as DiagramItem[] : initialItems; } catch { return initialItems; }
   });
@@ -37,6 +39,15 @@ export default function DiagramEditor({ value, onSave, readOnly = false }: { val
   const nodes = useRef(new Map<string, Konva.Node>());
   const selectedItem = items.find((item) => item.id === selectedId);
 
+  useEffect(() => {
+    const container = canvasWrapRef.current;
+    if (!container) return;
+    const observer = new ResizeObserver(([entry]) => {
+      setCanvasWidth(Math.min(620, Math.floor(entry.contentRect.width)));
+    });
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, []);
   useEffect(() => {
     const selected = selectedId ? nodes.current.get(selectedId) : undefined;
     transformerRef.current?.nodes(selected ? [selected] : []);
@@ -79,11 +90,13 @@ export default function DiagramEditor({ value, onSave, readOnly = false }: { val
           {onSave && <Button onClick={() => void save()}><Save size={15} /> {saved ? "Saved!" : "Save diagram"}</Button>}
         </div>
       </div>}
-      <div className="canvas-wrap">
+      <div className="canvas-wrap" ref={canvasWrapRef}>
         <Stage
           ref={stageRef}
-          width={620}
-          height={360}
+          width={canvasWidth}
+          height={canvasWidth * 360 / 620}
+          scaleX={canvasWidth / 620}
+          scaleY={canvasWidth / 620}
           onMouseDown={readOnly ? undefined : (event) => { if (event.target === event.target.getStage()) setSelectedId(null); }}
           className="court-canvas"
         >

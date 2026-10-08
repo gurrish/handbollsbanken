@@ -200,10 +200,10 @@ select.field { padding-right: 25px; cursor: pointer; }
 .training-exercise-copy > strong { color: #3b465c; font-size: 11px; }
 .training-exercise p { margin: 5px 0 0; color: #8992a5; font-size: 10px; line-height: 1.55; }
 .training-exercise > .badge { margin-left: auto; }
-.training-exercise-diagram { max-width: 100%; margin-top: 12px; }
+.training-exercise-diagram { width: 100%; min-width: 0; max-width: 100%; margin-top: 12px; }
 .training-exercise-diagram .diagram-editor { margin-top: 0; }
-.training-exercise-diagram .canvas-wrap { overflow: hidden; justify-content: flex-start; padding: 8px; border: 1px solid #e9edf3; border-radius: 8px; }
-.training-exercise-diagram .court-canvas { width: min(100%,620px) !important; height: auto !important; }
+.training-exercise-diagram .canvas-wrap { width: 100%; min-width: 0; overflow: hidden; justify-content: center; padding: 8px; border: 1px solid #e9edf3; border-radius: 8px; }
+.training-exercise-diagram .court-canvas { max-width: 100%; }
 .training-print-content { display: flex; flex-direction: column; gap: 14px; }
 .training-sharing-note { margin: 0; color: #9ba3b2; font-size: 9px; }
 .exercise-detail-heading { align-items: flex-start; }
@@ -251,7 +251,7 @@ select.field { padding-right: 25px; cursor: pointer; }
   body * { visibility: hidden !important; }
   .exercise-detail, .exercise-detail *, .training-detail, .training-detail * { visibility: visible !important; }
   .exercise-detail { position: absolute; inset: 0 auto auto 0; width: 100%; gap: 12px; color: #202a40; }
-  .training-detail { position: absolute; inset: 0 auto auto 0; width: 100%; gap: 5mm; color: #202a40; }
+  .training-detail { position: absolute; inset: 0; width: auto; min-width: 0; gap: 5mm; color: #202a40; }
   .exercise-detail-controls, .training-detail-controls, .exercise-detail .diagram-toolbar, .training-detail .diagram-toolbar,
   .exercise-detail .canvas-caption, .training-detail .canvas-caption,
   .exercise-detail .diagram-legend, .exercise-detail .saving-indicator, .exercise-detail .error-banner,
@@ -267,13 +267,16 @@ select.field { padding-right: 25px; cursor: pointer; }
   .training-print-content { gap: 4mm; }
   .training-detail-card, .training-exercise { break-inside: avoid; border: 1px solid #d7dce5; border-radius: 0; box-shadow: none; }
   .training-detail-card { gap: 3mm; padding: 4mm; }
-  .training-exercise { padding: 4mm; }
+  .training-exercise { display: grid; grid-template-columns: 7mm minmax(0, 1fr) auto; align-items: start; width: 100%; min-width: 0; padding: 4mm; }
   .training-exercise-copy > strong { color: #202a40; font-size: 11pt; }
   .training-exercise p { color: #303b52; font-size: 9pt; }
+  .training-exercise > .badge { margin-left: 0; }
   .training-exercises { gap: 3mm; }
   .training-exercises > .section-heading h2 { color: #202a40; }
   .training-exercise-diagram { break-inside: avoid; margin-top: 3mm; }
-  .training-exercise-diagram .canvas-wrap { overflow: visible; padding: 2mm; }
+  .training-exercise-diagram, .training-exercise-diagram .canvas-wrap, .training-exercise-diagram .diagram-editor { width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; }
+  .training-exercise-diagram .canvas-wrap { overflow: hidden; padding: 2mm; }
+  .training-exercise-diagram .court-canvas { max-width: 100%; }
   .exercise-detail-card, .exercise-diagram-card { break-inside: avoid; border: 1px solid #d7dce5; border-radius: 0; box-shadow: none; }
   .exercise-detail-card { gap: 3mm; padding: 5mm; }
   .exercise-detail-card h2 { color: #202a40; font-size: 15pt; }
