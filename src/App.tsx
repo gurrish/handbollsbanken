@@ -10,11 +10,12 @@ import { api, loadBootstrap, saveExercise, savePlan, saveTemplate, scheduleTempl
 import { LanguageSelect, localize, translateText, useLocale } from "./lib/i18n";
 import type { Bootstrap, Exercise, Role, TrainingPlan, TrainingSchedule, TrainingTemplate } from "./types";
 
-type Page = "overview" | "library" | "planner" | "admin";
+type Page = "overview" | "library" | "planner" | "templates" | "admin";
 const navItems: { id: Page; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
   { id: "library", label: "Exercise library", icon: Library },
   { id: "planner", label: "Training planner", icon: CalendarDays },
+  { id: "templates", label: "Training templates", icon: Copy },
   { id: "admin", label: "Club administration", icon: Users },
 ];
 const demoCategories = ["Attack", "Passing", "Shooting", "Defense", "Warm-up", "Footwork", "Core", "Other"];
@@ -43,7 +44,7 @@ export default function App() {
   const [data, setData] = useState<Bootstrap | null>(null);
   const [page, setPage] = useState<Page>(() => {
     const params = new URLSearchParams(window.location.search);
-    return params.has("training") || params.has("template") ? "planner" : params.has("exercise") ? "library" : "overview";
+    return params.has("training") ? "planner" : params.has("template") ? "templates" : params.has("exercise") ? "library" : "overview";
   });
   const [sharedTrainingId, setSharedTrainingId] = useState(() => new URLSearchParams(window.location.search).get("training"));
   const [sharedExerciseId, setSharedExerciseId] = useState(() => new URLSearchParams(window.location.search).get("exercise"));
@@ -163,18 +164,18 @@ export default function App() {
     setEditingTrainingId(edit ? id : null);
     setMobileOpen(false);
   };
-  const openScheduleOccurrence = (schedule: TrainingSchedule, date: string, template?: TrainingTemplate) => {
+  const openScheduleOccurrence = (schedule: TrainingSchedule, date: string, template?: TrainingTemplate, existingPlan?: TrainingPlan) => {
     const team = data?.teams.find((item) => item.id === schedule.teamId);
     setPlanModal({
-      id: "",
+      id: existingPlan?.id || "",
       clubId: schedule.clubId,
       teamId: schedule.teamId,
       title: template?.title || `${team?.name || "Team"} training`,
       date,
       duration: schedule.duration,
-      exerciseIds: template?.exerciseIds || [],
-      customExercises: template?.customExercises,
-      exerciseDurations: template?.exerciseDurations,
+      exerciseIds: template ? [...template.exerciseIds] : [],
+      customExercises: template?.customExercises?.map((exercise) => ({ ...exercise })),
+      exerciseDurations: template?.exerciseDurations ? { ...template.exerciseDurations } : undefined,
       notes: template?.notes || "",
       scheduleId: schedule.id,
       startTime: schedule.startTime,
@@ -191,6 +192,7 @@ export default function App() {
     setSharedTrainingId(null);
     setSharedExerciseId(null);
     setEditingTrainingId(edit ? id : null);
+    setPage("templates");
     setMobileOpen(false);
   };
   const openExercise = (id: string, edit = false) => {
@@ -237,7 +239,8 @@ export default function App() {
       setSharedExerciseId(exerciseId);
       setSharedTemplateId(templateId);
       setEditingExerciseId(null);
-      if (trainingId || templateId) setPage("planner");
+      if (trainingId) setPage("planner");
+      else if (templateId) setPage("templates");
       else if (exerciseId) setPage("library");
     };
     window.addEventListener("popstate", handlePopState);
@@ -355,7 +358,7 @@ export default function App() {
             canEdit={canEdit}
             saving={saving}
             startEditing={editingTrainingId === sharedTemplateId}
-            onBack={() => { clearSharedLink(); setPage("planner"); }}
+            onBack={() => { clearSharedLink(); setPage("templates"); }}
             onSchedule={() => { if (sharedTemplate) setScheduleTemplate(sharedTemplate); }}
             onSave={async (value) => {
               if (!sharedTemplate || "teamId" in value) return false;
@@ -386,7 +389,17 @@ export default function App() {
             onCreate={() => setExerciseModal(null)} onOpen={openExercise} onEdit={(exercise) => openExercise(exercise.id, true)}
             onDelete={(exercise) => { if (window.confirm(translateText(`Delete “${exercise.title}”? This cannot be undone.`))) void act(() => api(`exercises/${exercise.id}`, { method: "DELETE" }), "Exercise deleted."); }}
           />}
-          {!sharedTrainingId && !sharedTemplateId && !sharedExerciseId && page === "planner" && <PlannerPage data={data} exerciseById={exerciseById} canEdit={canEdit} saving={saving} onTeamsChange={(teamIds) => act(() => api("users/me/teams", { method: "PATCH", body: JSON.stringify({ teamIds }) }), "Team preferences saved.")} onCreate={() => setPlanModal(null)} onCreateTemplate={() => setTemplateModal(null)} onCreateSchedule={() => setScheduleModal(null)} onEditSchedule={setScheduleModal} onDeleteSchedule={(schedule) => { if (window.confirm(translateText("Delete this recurring schedule? Planned sessions will remain on the calendar."))) void act(() => api(`schedules/${schedule.id}`, { method: "DELETE" }), "Recurring schedule deleted."); }} onPlanOccurrence={openScheduleOccurrence} onSkipOccurrence={(schedule, date, skip) => void act(() => api(`schedules/${schedule.id}/skip`, { method: skip ? "POST" : "DELETE", body: JSON.stringify({ date }) }), skip ? "Training occurrence skipped." : "Training occurrence restored.")} onEdit={(plan) => openTraining(plan.id, true)} onOpen={openTraining} onShare={(id) => void copyTrainingLink(id)} onSchedule={(template) => setScheduleTemplate(template)} onOpenTemplate={openTemplate} onEditTemplate={(template) => openTemplate(template.id, true)} onDeleteTemplate={(template) => { if (window.confirm(translateText(`Delete “${template.title}”?`))) void act(() => api(`templates/${template.id}`, { method: "DELETE" }), "Template deleted."); }} onDelete={(plan) => { if (window.confirm(translateText(`Delete “${plan.title}”?`))) void act(() => api(`plans/${plan.id}`, { method: "DELETE" }), "Session deleted."); }} />}
+          {!sharedTrainingId && !sharedTemplateId && !sharedExerciseId && page === "planner" && <PlannerPage data={data} exerciseById={exerciseById} canEdit={canEdit} saving={saving} onTeamsChange={(teamIds) => act(() => api("users/me/teams", { method: "PATCH", body: JSON.stringify({ teamIds }) }), "Team preferences saved.")} onCreate={() => setPlanModal(null)} onCreateSchedule={() => setScheduleModal(null)} onEditSchedule={setScheduleModal} onDeleteSchedule={(schedule) => { if (window.confirm(translateText("Delete this recurring schedule? Planned sessions will remain on the calendar."))) void act(() => api(`schedules/${schedule.id}`, { method: "DELETE" }), "Recurring schedule deleted."); }} onPlanOccurrence={openScheduleOccurrence} onSkipOccurrence={(schedule, date, skip) => void act(() => api(`schedules/${schedule.id}/skip`, { method: skip ? "POST" : "DELETE", body: JSON.stringify({ date }) }), skip ? "Training occurrence skipped." : "Training occurrence restored.")} onEdit={(plan) => openTraining(plan.id, true)} onOpen={openTraining} onShare={(id) => void copyTrainingLink(id)} onDelete={(plan) => { if (window.confirm(translateText(`Delete “${plan.title}”?`))) void act(() => api(`plans/${plan.id}`, { method: "DELETE" }), "Session deleted."); }} />}
+          {!sharedTrainingId && !sharedTemplateId && !sharedExerciseId && page === "templates" && <TemplatesPage
+            data={data}
+            exerciseById={exerciseById}
+            canEdit={canEdit}
+            onCreate={() => setTemplateModal(null)}
+            onOpen={openTemplate}
+            onSchedule={setScheduleTemplate}
+            onEdit={(template) => openTemplate(template.id, true)}
+            onDelete={(template) => { if (window.confirm(translateText(`Delete “${template.title}”?`))) void act(() => api(`templates/${template.id}`, { method: "DELETE" }), "Template deleted."); }}
+          />}
           {!sharedTrainingId && !sharedTemplateId && !sharedExerciseId && page === "admin" && <AdminPage data={data} isGlobalAdmin={isGlobalAdmin} saving={saving} onCreateClub={() => void act(() => api("clubs", { method: "POST", body: JSON.stringify({ name: clubName }) }), "Club created.")} onRenameClub={(club) => { const name = window.prompt(translateText("Rename club"), club.name)?.trim(); if (name && name !== club.name) void act(() => api(`clubs/${club.id}`, { method: "PUT", body: JSON.stringify({ name }) }), "Club name updated."); }} onClubName={setClubName} clubName={clubName} onCreateTeam={() => void act(() => api("teams", { method: "POST", body: JSON.stringify({ name: teamName, ageGroup: teamAge }) }), "Team created.")} onEditTeam={(team) => setTeamModal(team)} onTeamName={setTeamName} teamName={teamName} teamAge={teamAge} onTeamAge={setTeamAge} onDecision={(request, status) => void act(() => api(`join-requests/${request.id}`, { method: "PATCH", body: JSON.stringify({ status }) }), status === "approved" ? "Coach approved." : "Request declined.")} onRoleChange={(userId, role) => void act(() => api(`users/${userId}/role`, { method: "PATCH", body: JSON.stringify({ role }) }), "Role updated.")} />}
         </div>
       </main>
@@ -696,7 +709,7 @@ function scheduleDates(schedule: TrainingSchedule) {
   return dates;
 }
 
-function PlannerPage({ data, exerciseById, canEdit, saving, onTeamsChange, onCreate, onCreateTemplate, onCreateSchedule, onEditSchedule, onDeleteSchedule, onPlanOccurrence, onSkipOccurrence, onEdit, onOpen, onShare, onSchedule, onOpenTemplate, onEditTemplate, onDeleteTemplate, onDelete }: { data: Bootstrap; exerciseById: Map<string, Exercise>; canEdit: boolean; saving: boolean; onTeamsChange: (teamIds: string[]) => Promise<boolean>; onCreate: () => void; onCreateTemplate: () => void; onCreateSchedule: () => void; onEditSchedule: (schedule: TrainingSchedule) => void; onDeleteSchedule: (schedule: TrainingSchedule) => void; onPlanOccurrence: (schedule: TrainingSchedule, date: string, template?: TrainingTemplate) => void; onSkipOccurrence: (schedule: TrainingSchedule, date: string, skip: boolean) => void; onEdit: (plan: TrainingPlan) => void; onOpen: (id: string) => void; onShare: (id: string) => void; onSchedule: (template: TrainingTemplate) => void; onOpenTemplate: (id: string, edit?: boolean) => void; onEditTemplate: (template: TrainingTemplate) => void; onDeleteTemplate: (template: TrainingTemplate) => void; onDelete: (plan: TrainingPlan) => void }) {
+function PlannerPage({ data, exerciseById, canEdit, saving, onTeamsChange, onCreate, onCreateSchedule, onEditSchedule, onDeleteSchedule, onPlanOccurrence, onSkipOccurrence, onEdit, onOpen, onShare, onDelete }: { data: Bootstrap; exerciseById: Map<string, Exercise>; canEdit: boolean; saving: boolean; onTeamsChange: (teamIds: string[]) => Promise<boolean>; onCreate: () => void; onCreateSchedule: () => void; onEditSchedule: (schedule: TrainingSchedule) => void; onDeleteSchedule: (schedule: TrainingSchedule) => void; onPlanOccurrence: (schedule: TrainingSchedule, date: string, template?: TrainingTemplate, existingPlan?: TrainingPlan) => void; onSkipOccurrence: (schedule: TrainingSchedule, date: string, skip: boolean) => void; onEdit: (plan: TrainingPlan) => void; onOpen: (id: string) => void; onShare: (id: string) => void; onDelete: (plan: TrainingPlan) => void }) {
   const { locale } = useLocale();
   const [selectedTeamIds, setSelectedTeamIds] = useState<string[]>(() => data.user.interestedTeamIds ?? data.teams.map((team) => team.id));
   const [showOlder, setShowOlder] = useState(false);
@@ -722,14 +735,8 @@ function PlannerPage({ data, exerciseById, canEdit, saving, onTeamsChange, onCre
   const occurrences = allOccurrences.filter((occurrence) => showOlder || occurrence.date >= today);
   const upcomingCount = upcoming.length + occurrences.filter((occurrence) => !occurrence.skipped).length;
   const upcomingMinutes = upcoming.reduce((total, plan) => total + plan.duration, 0) + occurrences.filter((occurrence) => !occurrence.skipped).reduce((total, occurrence) => total + occurrence.schedule.duration, 0);
-  const selectedAgeGroups = new Set(data.teams.filter((team) => selectedTeamIds.includes(team.id)).map((team) => team.ageGroup));
-  const visibleTemplates = data.templates.filter((template) => {
-    if (!template.ageGroup) return canEdit;
-    const ageGroup = template.ageGroup;
-    return ageGroup === "All ages" || selectedAgeGroups.has(ageGroup);
-  });
   return localize(<div className="content-page">
-    <div className="page-intro"><div><span className="section-kicker">MAKE TIME FOR THE GOOD STUFF</span><h1>Training planner</h1><p>Set your teams’ regular weekly slots, then plan activities for each session.</p></div>{canEdit && <div className="planner-actions"><Button variant="secondary" onClick={onCreateTemplate}><Plus size={16} /> Create training template</Button><Button variant="secondary" onClick={onCreateSchedule}><Plus size={16} /> Define weekly schedule</Button><Button onClick={onCreate}><Plus size={16} /> Plan a session</Button></div>}</div>
+    <div className="page-intro"><div><span className="section-kicker">MAKE TIME FOR THE GOOD STUFF</span><h1>Training planner</h1><p>Set your teams’ regular weekly slots, then plan activities for each session.</p></div>{canEdit && <div className="planner-actions"><Button variant="secondary" onClick={onCreateSchedule}><Plus size={16} /> Define weekly schedule</Button><Button onClick={onCreate}><Plus size={16} /> Plan a session</Button></div>}</div>
     <Card className="team-filter">
       <div><strong>Teams I’m interested in</strong><span>Only trainings for selected teams are shown.</span></div>
       <div className="team-filter-options">{data.teams.map((team) => <label key={team.id}><input type="checkbox" checked={selectedTeamIds.includes(team.id)} onChange={(event) => setSelectedTeamIds((current) => event.target.checked ? [...current, team.id] : current.filter((id) => id !== team.id))} /><span data-no-translate>{team.name}</span><small>{team.ageGroup}</small></label>)}</div>
@@ -743,16 +750,27 @@ function PlannerPage({ data, exerciseById, canEdit, saving, onTeamsChange, onCre
         return <Card className={`scheduled-occurrence ${skipped ? "occurrence-skipped" : ""}`} key={`${schedule.id}-${date}`}>
           <div className="occurrence-date"><strong>{new Date(`${date}T12:00:00`).getDate()}</strong><span>{dateLabel(date, { month: "short" })} · {dateLabel(date, { weekday: "short" })}</span></div>
           <div className="occurrence-main"><div className="occurrence-team"><strong data-no-translate={Boolean(team)}>{team?.name || "Team"}</strong><small>{schedule.startTime} · {schedule.duration} min</small></div>{skipped ? <span className="occurrence-status">Skipped</span> : plan ? <button type="button" className="occurrence-plan-link" onClick={() => onOpen(plan.id)}><strong data-no-translate>{plan.title}</strong><small>Planned</small></button> : <span className="occurrence-status">Needs activities</span>}</div>
-          <div className="occurrence-actions">{skipped ? canEdit && <Button variant="secondary" onClick={() => onSkipOccurrence(schedule, date, false)}>Restore</Button> : plan ? canEdit && <Button variant="secondary" onClick={() => onEdit(plan)}>Edit plan</Button> : canEdit && <><Button variant="secondary" onClick={() => onPlanOccurrence(schedule, date)}>Plan manually</Button>{templates.length > 0 && <Select aria-label={`Choose a template for ${team?.name || "team"} on ${date}`} value="" onChange={(event) => { const template = templates.find((item) => item.id === event.target.value); if (template) onPlanOccurrence(schedule, date, template); }}><option value="">Plan from template…</option>{templates.map((template) => <option key={template.id} value={template.id}>{template.title}</option>)}</Select>}<Button variant="ghost" onClick={() => onSkipOccurrence(schedule, date, true)}>Skip</Button></>}</div>
+          <div className="occurrence-actions">{skipped ? canEdit && <Button variant="secondary" onClick={() => onSkipOccurrence(schedule, date, false)}>Restore</Button> : <>{plan ? canEdit && <Button variant="secondary" onClick={() => onEdit(plan)}>Edit plan</Button> : canEdit && <Button variant="secondary" onClick={() => onPlanOccurrence(schedule, date)}>Plan manually</Button>}{canEdit && templates.length > 0 && <Select aria-label={`Choose a template for ${team?.name || "team"} on ${date}`} value="" onChange={(event) => { const template = templates.find((item) => item.id === event.target.value); if (template) onPlanOccurrence(schedule, date, template, plan); }}><option value="">Plan from template…</option>{templates.map((template) => <option key={template.id} value={template.id}>{template.title}</option>)}</Select>}{!plan && canEdit && <Button variant="ghost" onClick={() => onSkipOccurrence(schedule, date, true)}>Skip</Button>}</>}</div>
         </Card>;
       })}</div> : <Card className="template-empty"><p>{selectedTeamIds.length ? "Define a weekly team schedule to start planning recurring sessions." : "Select teams above to see their weekly schedules."}</p>{canEdit && selectedTeamIds.length > 0 && <Button variant="secondary" onClick={onCreateSchedule}><Plus size={15} /> Define weekly schedule</Button>}</Card>}
       {selectedSchedules.map((schedule) => <div className="schedule-management-row" key={schedule.id}><span>{data.teams.find((team) => team.id === schedule.teamId)?.name} · {new Intl.DateTimeFormat(locale === "sv" ? "sv-SE" : "en-GB", { weekday: "short" }).format(new Date(Date.UTC(2024, 0, 7 + schedule.weekday)))} {schedule.startTime} · {schedule.duration} min</span>{canEdit && <span><button type="button" className="text-action" onClick={() => onEditSchedule(schedule)}>Edit schedule</button><button type="button" className="text-action" onClick={() => onDeleteSchedule(schedule)}>Delete schedule</button></span>}</div>)}
     </section>
-    {data.templates.length > 0 && <section className="template-section"><div className="section-heading"><div><span className="section-kicker">READY-TO-USE PRACTICES</span><h2>Training templates</h2></div><span className="muted-small">For selected teams</span></div>{visibleTemplates.length ? <div className="template-list">{visibleTemplates.map((template) => <TemplateCard key={template.id} template={template} exerciseById={exerciseById} canEdit={canEdit} onOpen={() => onOpenTemplate(template.id)} onSchedule={() => onSchedule(template)} onEdit={() => onEditTemplate(template)} onDelete={() => onDeleteTemplate(template)} />)}</div> : <Card className="template-empty"><p>No training templates match the selected teams’ age groups.</p></Card>}</section>}
     <div className="planner-summary"><div><div className="summary-icon"><CalendarDays size={18} /></div><span><strong>{upcomingCount} sessions</strong><small>for selected teams</small></span></div><div><div className="summary-icon green-summary"><Clock3 size={18} /></div><span><strong>{upcomingMinutes} min</strong><small>court time scheduled</small></span></div><div><div className="summary-icon peach-summary"><Users size={18} /></div><span><strong>{selectedTeamIds.length} teams</strong><small>selected</small></span></div></div>
     {visiblePlans.length > 0 && <div className="plan-list">{visiblePlans.map((plan, index) => <PlanCard key={plan.id} plan={plan} data={data} exerciseById={exerciseById} canEdit={canEdit} index={index} onEdit={() => onEdit(plan)} onOpen={() => onOpen(plan.id)} onShare={() => onShare(plan.id)} onDelete={() => onDelete(plan)} />)}</div>}
     {selectedPlans.length === 0 && selectedSchedules.length === 0 && <Card><EmptyState icon={CalendarDays} title={selectedTeamIds.length ? "No sessions on the calendar" : "No teams selected"} text={selectedTeamIds.length ? "Put together a practice and make the most of your court time." : "Select one or more teams above to see their planned trainings."} action={selectedTeamIds.length ? "Plan your first session" : "Choose teams"} onClick={selectedTeamIds.length ? onCreate : () => document.querySelector(".team-filter")?.scrollIntoView({ behavior: "smooth", block: "center" })} /></Card>}
     {older.length + olderOccurrences.length > 0 && <button type="button" className="show-older-link" aria-expanded={showOlder} onClick={() => setShowOlder((current) => !current)}>{showOlder ? "Hide older" : "Show older"}{!showOlder && ` (${older.length + olderOccurrences.length})`}</button>}
+  </div>);
+}
+function TemplatesPage({ data, exerciseById, canEdit, onCreate, onOpen, onSchedule, onEdit, onDelete }: { data: Bootstrap; exerciseById: Map<string, Exercise>; canEdit: boolean; onCreate: () => void; onOpen: (id: string) => void; onSchedule: (template: TrainingTemplate) => void; onEdit: (template: TrainingTemplate) => void; onDelete: (template: TrainingTemplate) => void }) {
+  const selectedTeamIds = data.user.interestedTeamIds ?? data.teams.map((team) => team.id);
+  const selectedAgeGroups = new Set(data.teams.filter((team) => selectedTeamIds.includes(team.id)).map((team) => team.ageGroup));
+  const visibleTemplates = data.templates.filter((template) => {
+    if (!template.ageGroup) return canEdit;
+    return template.ageGroup === "All ages" || selectedAgeGroups.has(template.ageGroup);
+  });
+  return localize(<div className="content-page">
+    <div className="page-intro"><div><span className="section-kicker">READY-TO-USE PRACTICES</span><h1>Training templates<span className="title-count">{visibleTemplates.length}</span></h1><p>Build reusable sessions for your teams and add copies to the calendar when you need them.</p></div>{canEdit && <Button onClick={onCreate}><Plus size={16} /> Create training template</Button>}</div>
+    {visibleTemplates.length ? <div className="template-list">{visibleTemplates.map((template) => <TemplateCard key={template.id} template={template} exerciseById={exerciseById} canEdit={canEdit} onOpen={() => onOpen(template.id)} onSchedule={() => onSchedule(template)} onEdit={() => onEdit(template)} onDelete={() => onDelete(template)} />)}</div> : <Card className="template-empty"><p>{data.templates.length ? "No training templates match the selected teams’ age groups." : "No training templates yet."}</p>{canEdit && !data.templates.length && <Button onClick={onCreate}><Plus size={15} /> Create training template</Button>}</Card>}
   </div>);
 }
 function PlanCard({ plan, data, exerciseById, canEdit, index, onEdit, onOpen, onShare, onDelete }: { plan: TrainingPlan; data: Bootstrap; exerciseById: Map<string, Exercise>; canEdit: boolean; index: number; onEdit: () => void; onOpen: () => void; onShare: () => void; onDelete: () => void }) {

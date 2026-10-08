@@ -304,7 +304,7 @@ export async function handle(request: HttpRequest, context: InvocationContext): 
     if (resource === "schedules" && method === "GET") {
       return json(await repo.list<TrainingSchedule>("TrainingSchedules", requireClub(user)));
     }
-    if (resource === "schedules" && method === "POST") {
+    if (resource === "schedules" && !id && method === "POST") {
       requireRole(user, "ClubAdmin", "Coach");
       const clubId = requireClub(user);
       const data = await body(request, trainingScheduleInput);
