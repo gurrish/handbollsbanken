@@ -28,7 +28,7 @@ function identity(request: HttpRequest): Identity {
     throw new HttpError(401, "Invalid sign-in session.");
   }
   const emailClaim = principal.claims?.find((claim) => /email|preferred_username/i.test(claim.typ))?.val;
-  const email = (emailClaim || principal.userDetails || "").toLowerCase();
+  const email = (emailClaim || principal.userDetails || "").trim().toLowerCase();
   if (!principal.userId || !email) throw new HttpError(401, "Your sign-in profile is missing an email address.");
   return { id: principal.userId, name: principal.userDetails || email, email };
 }
@@ -47,17 +47,28 @@ async function body<T>(request: HttpRequest, schema: { safeParse: (data: unknown
   return result.data as T;
 }
 async function getCurrentUser(repo: Repository, actor: Identity): Promise<User> {
-  let user = await repo.get<User>("Users", "users", actor.id);
+  const users = await repo.list<User>("Users", "users");
+  const emailMatches = users.filter((item) => item.email.trim().toLowerCase() === actor.email);
+  const rank = (item: User) => item.status === "approved" ? 2 : item.clubId ? 1 : 0;
+  const bestRank = Math.max(...emailMatches.map(rank), -1);
+  const bestMatches = emailMatches.filter((item) => rank(item) === bestRank);
+  const user = bestMatches.find((item) => item.id === actor.id)
+    ?? (bestMatches.length === 1 ? bestMatches[0] : undefined)
+    ?? (emailMatches.length ? undefined : users.find((item) => item.id === actor.id));
+  if (emailMatches.length && !user) throw new HttpError(409, "Multiple user accounts share this email address. Contact a club administrator.");
   if (!user) {
     const globalAdmins = (process.env.GLOBAL_ADMIN_EMAILS || "").split(",").map((email) => email.trim().toLowerCase()).filter(Boolean);
-    user = {
+    const newUser: User = {
       id: actor.id, name: actor.name, email: actor.email, clubId: null,
       roles: globalAdmins.includes(actor.email) ? ["GlobalAdmin"] : ["Viewer"], status: "pending",
     };
-    await repo.upsert("Users", "users", user);
-  } else if (user.email !== actor.email) {
-    user = { ...user, email: actor.email };
-    await repo.upsert("Users", "users", user);
+    await repo.upsert("Users", "users", newUser);
+    return newUser;
+  }
+  if (user.email !== actor.email) {
+    const updatedUser = { ...user, email: actor.email };
+    await repo.upsert("Users", "users", updatedUser);
+    return updatedUser;
   }
   return user;
 }
