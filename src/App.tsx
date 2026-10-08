@@ -786,15 +786,26 @@ function PlannerPage({ data, exerciseById, canEdit, saving, onTeamsChange, onCre
   </div>);
 }
 function TemplatesPage({ data, exerciseById, canEdit, onCreate, onOpen, onSchedule, onEdit, onDelete }: { data: Bootstrap; exerciseById: Map<string, Exercise>; canEdit: boolean; onCreate: () => void; onOpen: (id: string) => void; onSchedule: (template: TrainingTemplate) => void; onEdit: (template: TrainingTemplate) => void; onDelete: (template: TrainingTemplate) => void }) {
-  const selectedTeamIds = data.user.interestedTeamIds ?? data.teams.map((team) => team.id);
-  const selectedAgeGroups = new Set(data.teams.filter((team) => selectedTeamIds.includes(team.id)).map((team) => team.ageGroup));
+  const [query, setQuery] = useState("");
+  const [ageFilter, setAgeFilter] = useState("All ages");
+  const [durationFilter, setDurationFilter] = useState("All durations");
+  const ageGroups = [...new Set(data.templates.map((template) => template.ageGroup || "Age group needed"))].sort();
+  const durations = [...new Set(data.templates.map((template) => template.duration))].sort((a, b) => a - b);
   const visibleTemplates = data.templates.filter((template) => {
-    if (!template.ageGroup) return canEdit;
-    return template.ageGroup === "All ages" || selectedAgeGroups.has(template.ageGroup);
+    const text = `${template.title} ${template.notes} ${template.customExercises?.map((exercise) => exercise.title).join(" ") || ""} ${template.exerciseIds.map((id) => data.exercises.find((exercise) => exercise.id === id)?.title || "").join(" ")}`.toLowerCase();
+    const matchesQuery = text.includes(query.trim().toLowerCase());
+    const matchesAge = ageFilter === "All ages" || template.ageGroup === "All ages" || (template.ageGroup || "Age group needed") === ageFilter;
+    const matchesDuration = durationFilter === "All durations" || template.duration === Number(durationFilter);
+    return matchesQuery && matchesAge && matchesDuration;
   });
   return localize(<div className="content-page">
-    <div className="page-intro"><div><span className="section-kicker">READY-TO-USE PRACTICES</span><h1>Training templates<span className="title-count">{visibleTemplates.length}</span></h1><p>Build reusable sessions for your teams and add copies to the calendar when you need them.</p></div>{canEdit && <Button onClick={onCreate}><Plus size={16} /> Create training template</Button>}</div>
-    {visibleTemplates.length ? <div className="template-list">{visibleTemplates.map((template) => <TemplateCard key={template.id} template={template} exerciseById={exerciseById} canEdit={canEdit} onOpen={() => onOpen(template.id)} onSchedule={() => onSchedule(template)} onEdit={() => onEdit(template)} onDelete={() => onDelete(template)} />)}</div> : <Card className="template-empty"><p>{data.templates.length ? "No training templates match the selected teams’ age groups." : "No training templates yet."}</p>{canEdit && !data.templates.length && <Button onClick={onCreate}><Plus size={15} /> Create training template</Button>}</Card>}
+    <div className="page-intro"><div><span className="section-kicker">READY-TO-USE PRACTICES</span><h1>Training templates<span className="title-count">{data.templates.length}</span></h1><p>Build reusable sessions for your teams and add copies to the calendar when you need them.</p></div>{canEdit && <Button onClick={onCreate}><Plus size={16} /> Create training template</Button>}</div>
+    {data.templates.length > 0 && <Card className="library-toolbar"><div className="search-box"><Search size={17} /><Input placeholder="Search training templates…" value={query} onChange={(event) => setQuery(event.target.value)} /></div><div className="filter-label"><Filter size={14} />FILTER BY</div>
+      <Select aria-label="Filter templates by age group" value={ageFilter} onChange={(event) => setAgeFilter(event.target.value)}><option>All ages</option>{ageGroups.map((ageGroup) => <option key={ageGroup}>{ageGroup}</option>)}</Select>
+      <Select aria-label="Filter templates by duration" value={durationFilter} onChange={(event) => setDurationFilter(event.target.value)}><option>All durations</option>{durations.map((duration) => <option key={duration} value={duration}>{duration} min</option>)}</Select>
+    </Card>}
+    {visibleTemplates.length ? <div className="template-list">{visibleTemplates.map((template) => <TemplateCard key={template.id} template={template} exerciseById={exerciseById} canEdit={canEdit} onOpen={() => onOpen(template.id)} onSchedule={() => onSchedule(template)} onEdit={() => onEdit(template)} onDelete={() => onDelete(template)} />)}</div> : <Card className="template-empty"><p>{data.templates.length ? "No training templates match your search or filters." : "No training templates yet."}</p>{canEdit && !data.templates.length && <Button onClick={onCreate}><Plus size={15} /> Create training template</Button>}{data.templates.length > 0 && (query || ageFilter !== "All ages" || durationFilter !== "All durations") && <Button variant="secondary" onClick={() => { setQuery(""); setAgeFilter("All ages"); setDurationFilter("All durations"); }}>Clear filters</Button>}</Card>}
+    {visibleTemplates.length > 0 && <div className="results-note">SHOWING {visibleTemplates.length} OF {data.templates.length} TRAINING TEMPLATES <span>·</span> SHARED WITH YOUR CLUB</div>}
   </div>);
 }
 function PlanCard({ plan, data, exerciseById, canEdit, index, onEdit, onOpen, onShare, onDelete }: { plan: TrainingPlan; data: Bootstrap; exerciseById: Map<string, Exercise>; canEdit: boolean; index: number; onEdit: () => void; onOpen: () => void; onShare: () => void; onDelete: () => void }) {
