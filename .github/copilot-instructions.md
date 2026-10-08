@@ -49,7 +49,7 @@ Do not introduce SQL databases, Cosmos DB, Kubernetes, App Service, Redis, Servi
 - Preserve Static Web Apps integrated Functions hosting and the current managed-identity design.
 - The infrastructure workflow authenticates with GitHub OIDC federation; do not add a client-secret requirement for the Entra service principal.
 - Keep workflow triggers and README deployment instructions aligned when changing resource parameters, secrets, variables, routes, or deployment paths.
-- Static Web Apps custom provider registrations replace preconfigured providers. Keep Microsoft Entra configured alongside Google, and only enable the Google sign-in button after both providers' credentials are configured in Azure.
+- Use Static Web Apps' built-in Microsoft Entra ID provider unless a complete custom provider registration is explicitly implemented. Custom provider configuration replaces the preconfigured providers. Do not show or document Google login as enabled unless its credentials and the corresponding custom Microsoft provider configuration are in place.
 
 ## Documentation
 

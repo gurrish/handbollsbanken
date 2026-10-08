@@ -36,7 +36,7 @@ module staticWebApp 'modules/static-web-app.bicep' = {
   name: 'static-web-app-${unique}'
   params: {
     name: appName
-    location: 'eastus2'
+    location: 'westeurope'
     storageAccountName: storage.outputs.accountName
     storageConnectionString: storageConnectionString
     globalAdminEmails: globalAdminEmails
