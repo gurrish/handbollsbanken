@@ -33,6 +33,8 @@ const translations: Record<string, string> = {
   "Select teams above to see their weekly schedules.": "Välj lag ovan för att se deras veckoscheman.",
   "Plan manually": "Planera manuellt",
   "Plan from template…": "Planera från mall…",
+  "Load from template": "Ladda från träningsmall",
+  "Choose template…": "Välj träningsmall…",
   "Plan this session": "Planera träningen",
   "Needs activities": "Aktiviteter saknas",
   "Planned": "Planerad",

@@ -166,6 +166,7 @@ export default function App() {
   };
   const openScheduleOccurrence = (schedule: TrainingSchedule, date: string, template?: TrainingTemplate, existingPlan?: TrainingPlan) => {
     const team = data?.teams.find((item) => item.id === schedule.teamId);
+    const exerciseDurations = template ? fitTemplateDurations(template, schedule.duration) : undefined;
     setPlanModal({
       id: existingPlan?.id || "",
       clubId: schedule.clubId,
@@ -175,7 +176,7 @@ export default function App() {
       duration: schedule.duration,
       exerciseIds: template ? [...template.exerciseIds] : [],
       customExercises: template?.customExercises?.map((exercise) => ({ ...exercise })),
-      exerciseDurations: template?.exerciseDurations ? { ...template.exerciseDurations } : undefined,
+      exerciseDurations,
       notes: template?.notes || "",
       scheduleId: schedule.id,
       startTime: schedule.startTime,
@@ -709,6 +710,22 @@ function scheduleDates(schedule: TrainingSchedule) {
   return dates;
 }
 
+function fitTemplateDurations(template: TrainingTemplate, duration: number): Record<string, number> {
+  const minutes = template.exerciseIds.map((id, index) => exerciseMinutes(template, id, index));
+  const total = minutes.reduce((sum, value) => sum + value, 0);
+  if (total === duration) return Object.fromEntries(template.exerciseIds.map((id, index) => [id, minutes[index]]));
+
+  const remaining = duration - minutes.length;
+  const weights = minutes.reduce((sum, value) => sum + value, 0);
+  const shares = minutes.map((value) => remaining * value / weights);
+  const fitted = shares.map((share) => 1 + Math.floor(share));
+  const unassigned = duration - fitted.reduce((sum, value) => sum + value, 0);
+  const remainders = shares.map((share, index) => ({ index, fraction: share - Math.floor(share) }))
+    .sort((a, b) => b.fraction - a.fraction || a.index - b.index);
+  for (let index = 0; index < unassigned; index += 1) fitted[remainders[index].index] += 1;
+  return Object.fromEntries(template.exerciseIds.map((id, index) => [id, fitted[index]]));
+}
+
 function PlannerPage({ data, exerciseById, canEdit, saving, onTeamsChange, onCreate, onCreateSchedule, onEditSchedule, onDeleteSchedule, onPlanOccurrence, onSkipOccurrence, onEdit, onOpen, onShare, onDelete }: { data: Bootstrap; exerciseById: Map<string, Exercise>; canEdit: boolean; saving: boolean; onTeamsChange: (teamIds: string[]) => Promise<boolean>; onCreate: () => void; onCreateSchedule: () => void; onEditSchedule: (schedule: TrainingSchedule) => void; onDeleteSchedule: (schedule: TrainingSchedule) => void; onPlanOccurrence: (schedule: TrainingSchedule, date: string, template?: TrainingTemplate, existingPlan?: TrainingPlan) => void; onSkipOccurrence: (schedule: TrainingSchedule, date: string, skip: boolean) => void; onEdit: (plan: TrainingPlan) => void; onOpen: (id: string) => void; onShare: (id: string) => void; onDelete: (plan: TrainingPlan) => void }) {
   const { locale } = useLocale();
   const [selectedTeamIds, setSelectedTeamIds] = useState<string[]>(() => data.user.interestedTeamIds ?? data.teams.map((team) => team.id));
@@ -746,11 +763,12 @@ function PlannerPage({ data, exerciseById, canEdit, saving, onTeamsChange, onCre
       <div className="section-heading"><div><span className="section-kicker">RECURRING TEAM SESSIONS</span><h2>Weekly schedule</h2></div></div>
       {selectedSchedules.length ? <div className="scheduled-occurrences">{occurrences.map(({ schedule, date, plan, skipped }) => {
         const team = data.teams.find((item) => item.id === schedule.teamId);
-        const templates = data.templates.filter((template) => template.duration === schedule.duration && (!template.ageGroup || template.ageGroup === "All ages" || template.ageGroup === team?.ageGroup));
+        const templates = data.templates.filter((template) => template.exerciseIds.length > 0 && template.exerciseIds.length <= schedule.duration
+          && (!template.ageGroup || template.ageGroup === "All ages" || template.ageGroup === team?.ageGroup));
         return <Card className={`scheduled-occurrence ${skipped ? "occurrence-skipped" : ""}`} key={`${schedule.id}-${date}`}>
           <div className="occurrence-date"><strong>{new Date(`${date}T12:00:00`).getDate()}</strong><span>{dateLabel(date, { month: "short" })} · {dateLabel(date, { weekday: "short" })}</span></div>
           <div className="occurrence-main"><div className="occurrence-team"><strong data-no-translate={Boolean(team)}>{team?.name || "Team"}</strong><small>{schedule.startTime} · {schedule.duration} min</small></div>{skipped ? <span className="occurrence-status">Skipped</span> : plan ? <button type="button" className="occurrence-plan-link" onClick={() => onOpen(plan.id)}><strong data-no-translate>{plan.title}</strong><small>Planned</small></button> : <span className="occurrence-status">Needs activities</span>}</div>
-          <div className="occurrence-actions">{skipped ? canEdit && <Button variant="secondary" onClick={() => onSkipOccurrence(schedule, date, false)}>Restore</Button> : <>{plan ? canEdit && <Button variant="secondary" onClick={() => onEdit(plan)}>Edit plan</Button> : canEdit && <Button variant="secondary" onClick={() => onPlanOccurrence(schedule, date)}>Plan manually</Button>}{canEdit && templates.length > 0 && <Select aria-label={`Choose a template for ${team?.name || "team"} on ${date}`} value="" onChange={(event) => { const template = templates.find((item) => item.id === event.target.value); if (template) onPlanOccurrence(schedule, date, template, plan); }}><option value="">Plan from template…</option>{templates.map((template) => <option key={template.id} value={template.id}>{template.title}</option>)}</Select>}{!plan && canEdit && <Button variant="ghost" onClick={() => onSkipOccurrence(schedule, date, true)}>Skip</Button>}</>}</div>
+          <div className="occurrence-actions">{skipped ? canEdit && <Button variant="secondary" onClick={() => onSkipOccurrence(schedule, date, false)}>Restore</Button> : <>{plan ? canEdit && <Button variant="secondary" onClick={() => onEdit(plan)}>Edit plan</Button> : canEdit && <Button variant="secondary" onClick={() => onPlanOccurrence(schedule, date)}>Plan manually</Button>}{canEdit && templates.length > 0 && <label className="occurrence-template-picker"><span>Load from template</span><Select aria-label={`Load from template for ${team?.name || "team"} on ${date}`} value="" onChange={(event) => { const template = templates.find((item) => item.id === event.target.value); if (template) onPlanOccurrence(schedule, date, template, plan); }}><option value="">Choose template…</option>{templates.map((template) => <option key={template.id} value={template.id}>{template.title} · {template.duration} min</option>)}</Select></label>}{!plan && canEdit && <Button variant="ghost" onClick={() => onSkipOccurrence(schedule, date, true)}>Skip</Button>}</>}</div>
         </Card>;
       })}</div> : <Card className="template-empty"><p>{selectedTeamIds.length ? "Define a weekly team schedule to start planning recurring sessions." : "Select teams above to see their weekly schedules."}</p>{canEdit && selectedTeamIds.length > 0 && <Button variant="secondary" onClick={onCreateSchedule}><Plus size={15} /> Define weekly schedule</Button>}</Card>}
       {selectedSchedules.map((schedule) => <div className="schedule-management-row" key={schedule.id}><span>{data.teams.find((team) => team.id === schedule.teamId)?.name} · {new Intl.DateTimeFormat(locale === "sv" ? "sv-SE" : "en-GB", { weekday: "short" }).format(new Date(Date.UTC(2024, 0, 7 + schedule.weekday)))} {schedule.startTime} · {schedule.duration} min</span>{canEdit && <span><button type="button" className="text-action" onClick={() => onEditSchedule(schedule)}>Edit schedule</button><button type="button" className="text-action" onClick={() => onDeleteSchedule(schedule)}>Delete schedule</button></span>}</div>)}
