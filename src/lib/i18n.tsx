@@ -152,6 +152,7 @@ const translations: Record<string, string> = {
   "Warm-up": "Uppvärmning",
   "Footwork": "Fotarbete",
   "Conditioning": "Kondition",
+  "Game": "Spel",
   "Other": "Övrigt",
   "All ages": "Alla åldrar",
   "All categories": "Alla kategorier",

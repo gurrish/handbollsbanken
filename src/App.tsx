@@ -18,7 +18,7 @@ const navItems: { id: Page; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "templates", label: "Training templates", icon: Copy },
   { id: "admin", label: "Club administration", icon: Users },
 ];
-const demoCategories = ["Attack", "Passing", "Shooting", "Defense", "Warm-up", "Footwork", "Conditioning", "Goalkeeper", "Other"];
+const demoCategories = ["Attack", "Passing", "Shooting", "Defense", "Warm-up", "Footwork", "Conditioning", "Goalkeeper", "Game", "Other"];
 function exerciseCategoryLabel(category: string) {
   return category === "Core" ? "Conditioning" : category;
 }
