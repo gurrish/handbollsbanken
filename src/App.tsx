@@ -45,6 +45,7 @@ export default function App() {
   const [sharedTrainingId, setSharedTrainingId] = useState(() => new URLSearchParams(window.location.search).get("training"));
   const [sharedExerciseId, setSharedExerciseId] = useState(() => new URLSearchParams(window.location.search).get("exercise"));
   const [sharedTemplateId, setSharedTemplateId] = useState(() => new URLSearchParams(window.location.search).get("template"));
+  const [editingExerciseId, setEditingExerciseId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [signedIn, setSignedIn] = useState(import.meta.env.DEV);
   const [error, setError] = useState("");
@@ -139,6 +140,7 @@ export default function App() {
     setSharedTrainingId(null);
     setSharedExerciseId(null);
     setSharedTemplateId(null);
+    setEditingExerciseId(null);
   };
   const changePage = (value: Page) => {
     if (sharedTrainingId || sharedExerciseId || sharedTemplateId) clearSharedLink();
@@ -169,7 +171,7 @@ export default function App() {
     setEditingTrainingId(edit ? id : null);
     setMobileOpen(false);
   };
-  const openExercise = (id: string) => {
+  const openExercise = (id: string, edit = false) => {
     const url = new URL(window.location.href);
     url.searchParams.set("exercise", id);
     url.searchParams.delete("training");
@@ -178,6 +180,7 @@ export default function App() {
     setSharedExerciseId(id);
     setSharedTrainingId(null);
     setSharedTemplateId(null);
+    setEditingExerciseId(edit ? id : null);
     setPage("library");
     setMobileOpen(false);
   };
@@ -211,6 +214,7 @@ export default function App() {
       setSharedTrainingId(trainingId);
       setSharedExerciseId(exerciseId);
       setSharedTemplateId(templateId);
+      setEditingExerciseId(null);
       if (trainingId || templateId) setPage("planner");
       else if (exerciseId) setPage("library");
     };
@@ -338,9 +342,14 @@ export default function App() {
           /> : sharedExerciseId ? <ExerciseDetailPage
             exercise={sharedExercise}
             canEdit={canEdit}
+            saving={saving}
+            startEditing={editingExerciseId === sharedExerciseId}
             onBack={() => { clearSharedLink(); setPage("library"); }}
             onShare={() => { if (sharedExercise) void copyExerciseLink(sharedExercise.id); }}
-            onEdit={() => { if (sharedExercise) setExerciseModal(sharedExercise); }}
+            onSave={async (value) => {
+              if (!sharedExercise) return false;
+              return act(() => saveExercise(value, sharedExercise.id), "Exercise updated.");
+            }}
             onSaveDiagram={async (diagramJson) => {
               if (!sharedExercise) return;
               await saveExercise({ ...sharedExercise, diagramJson }, sharedExercise.id);
@@ -352,7 +361,7 @@ export default function App() {
             exercises={filteredExercises} total={data.exercises.length} query={query} setQuery={setQuery}
             ageFilter={ageFilter} setAgeFilter={setAgeFilter} categoryFilter={categoryFilter} setCategoryFilter={setCategoryFilter}
             complexityFilter={complexityFilter} setComplexityFilter={setComplexityFilter} canEdit={canEdit}
-            onCreate={() => setExerciseModal(null)} onOpen={openExercise} onEdit={(exercise) => setExerciseModal(exercise)}
+            onCreate={() => setExerciseModal(null)} onOpen={openExercise} onEdit={(exercise) => openExercise(exercise.id, true)}
             onDelete={(exercise) => { if (window.confirm(translateText(`Delete “${exercise.title}”? This cannot be undone.`))) void act(() => api(`exercises/${exercise.id}`, { method: "DELETE" }), "Exercise deleted."); }}
           />}
           {!sharedTrainingId && !sharedTemplateId && !sharedExerciseId && page === "planner" && <PlannerPage data={data} exerciseById={exerciseById} canEdit={canEdit} saving={saving} onTeamsChange={(teamIds) => act(() => api("users/me/teams", { method: "PATCH", body: JSON.stringify({ teamIds }) }), "Team preferences saved.")} onCreate={() => setPlanModal(null)} onCreateTemplate={() => setTemplateModal(null)} onEdit={(plan) => openTraining(plan.id, true)} onOpen={openTraining} onShare={(id) => void copyTrainingLink(id)} onSchedule={(template) => setScheduleTemplate(template)} onOpenTemplate={openTemplate} onEditTemplate={(template) => openTemplate(template.id, true)} onDeleteTemplate={(template) => { if (window.confirm(translateText(`Delete “${template.title}”?`))) void act(() => api(`templates/${template.id}`, { method: "DELETE" }), "Template deleted."); }} onDelete={(plan) => { if (window.confirm(translateText(`Delete “${plan.title}”?`))) void act(() => api(`plans/${plan.id}`, { method: "DELETE" }), "Session deleted."); }} />}
@@ -480,38 +489,43 @@ function ExerciseCard({ exercise, canEdit, onOpen, onEdit, onDelete }: { exercis
   return localize(<Card className="exercise-card"><div className="exercise-card-body"><div className="exercise-meta"><Badge>{exercise.ageGroup}</Badge><span className={`complexity-dot complexity-${exercise.complexity.toLowerCase()}`} /> <span>{exercise.complexity}</span><span className="exercise-category">{exercise.category}</span></div><h3 data-no-translate>{exercise.title}</h3><p data-no-translate={Boolean(exercise.description)}>{exercise.description || "A club drill, ready to take to the court."}</p><div className="exercise-tags">{exercise.tags.slice(0, 3).map((tag) => <span key={tag} data-no-translate>#{tag}</span>)}</div><div className="exercise-card-foot card-actions"><Button onClick={onOpen} variant="secondary" className="exercise-open">View exercise <ArrowUpRight size={15} /></Button>{canEdit && <div className="exercise-actions"><Button variant="ghost" onClick={onEdit}>Edit</Button><Button variant="ghost" onClick={onDelete}>Delete</Button></div>}</div></div></Card>);
 }
 
-function ExerciseForm({ exercise, canEdit, saving, onClose, onSave }: { exercise?: Exercise; canEdit: boolean; saving: boolean; onClose: () => void; onSave: (data: Omit<Exercise, "id" | "clubId" | "createdBy">) => Promise<void> }) {
+function ExerciseForm({ exercise, canEdit, saving, inline = false, onClose, onSave }: { exercise?: Exercise; canEdit: boolean; saving: boolean; inline?: boolean; onClose: () => void; onSave: (data: Omit<Exercise, "id" | "clubId" | "createdBy">) => Promise<void> }) {
   const [title, setTitle] = useState(exercise?.title || "");
   const [description, setDescription] = useState(exercise?.description || "");
   const [ageGroup, setAgeGroup] = useState(exercise?.ageGroup || "U14");
   const [category, setCategory] = useState(exercise?.category || "Passing");
   const [complexity, setComplexity] = useState(exercise?.complexity || "Intermediate");
   const [tags, setTags] = useState(exercise?.tags.join(", ") || "");
-  return localize(<Modal title={!canEdit ? "Exercise details" : exercise ? "Edit exercise" : "Add an exercise"} onClose={onClose} wide><form className="modal-form" onSubmit={(event) => {
+  const form = <form className={`modal-form ${inline ? "inline-plan-form" : ""}`} onSubmit={(event) => {
     event.preventDefault();
     if (!canEdit) return;
     void onSave({ title, description, ageGroup, category, complexity, tags: tags.split(",").map((tag) => tag.trim()).filter(Boolean), diagramJson: exercise?.diagramJson || "[]" });
-  }}><p className="modal-lead">{canEdit ? "Build a drill your whole club can put to use." : "A drill shared with your club."}</p><Field label="Exercise name"><Input autoFocus required minLength={2} maxLength={100} value={title} onChange={(event) => setTitle(event.target.value)} placeholder="e.g. Three-lane passing" disabled={!canEdit} /></Field><Field label="What’s the idea?"><Textarea rows={3} maxLength={2000} value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Describe the setup, movement and coaching points…" disabled={!canEdit} /></Field><div className="form-row"><Field label="Age group"><Select value={ageGroup} onChange={(event) => setAgeGroup(event.target.value)} disabled={!canEdit}>{ageGroups.map(({ value, label }) => <option key={value} value={value}>{label}</option>)}<option>All ages</option></Select></Field><Field label="Category"><Select value={category} onChange={(event) => setCategory(event.target.value)} disabled={!canEdit}>{demoCategories.map((value) => <option key={value}>{value}</option>)}</Select></Field></div><div className="form-row"><Field label="Complexity"><Select value={complexity} onChange={(event) => setComplexity(event.target.value)} disabled={!canEdit}>{["Beginner", "Intermediate", "Advanced"].map((value) => <option key={value}>{value}</option>)}</Select></Field><Field label="Tags" hint="Separate tags with commas"><Input value={tags} onChange={(event) => setTags(event.target.value)} placeholder="e.g. passing, speed" disabled={!canEdit} /></Field></div><div className="modal-actions"><Button type="button" variant="ghost" onClick={onClose}>{canEdit ? "Cancel" : "Close"}</Button>{canEdit && <Button type="submit" disabled={saving}>{saving ? "Saving…" : exercise ? "Save changes" : "Add to library"} <ArrowUpRight size={15} /></Button>}</div></form></Modal>);
+  }}><p className="modal-lead">{canEdit ? "Build a drill your whole club can put to use." : "A drill shared with your club."}</p><Field label="Exercise name"><Input autoFocus required minLength={2} maxLength={100} value={title} onChange={(event) => setTitle(event.target.value)} placeholder="e.g. Three-lane passing" disabled={!canEdit} /></Field><Field label="What’s the idea?"><Textarea rows={3} maxLength={2000} value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Describe the setup, movement and coaching points…" disabled={!canEdit} /></Field><div className="form-row"><Field label="Age group"><Select value={ageGroup} onChange={(event) => setAgeGroup(event.target.value)} disabled={!canEdit}>{ageGroups.map(({ value, label }) => <option key={value} value={value}>{label}</option>)}<option>All ages</option></Select></Field><Field label="Category"><Select value={category} onChange={(event) => setCategory(event.target.value)} disabled={!canEdit}>{demoCategories.map((value) => <option key={value}>{value}</option>)}</Select></Field></div><div className="form-row"><Field label="Complexity"><Select value={complexity} onChange={(event) => setComplexity(event.target.value)} disabled={!canEdit}>{["Beginner", "Intermediate", "Advanced"].map((value) => <option key={value}>{value}</option>)}</Select></Field><Field label="Tags" hint="Separate tags with commas"><Input value={tags} onChange={(event) => setTags(event.target.value)} placeholder="e.g. passing, speed" disabled={!canEdit} /></Field></div><div className="modal-actions"><Button type="button" variant="ghost" onClick={onClose}>{canEdit ? "Cancel" : "Close"}</Button>{canEdit && <Button type="submit" disabled={saving}>{saving ? "Saving…" : exercise ? "Save changes" : "Add to library"} <ArrowUpRight size={15} /></Button>}</div></form>;
+  return localize(inline ? <Card className="training-editor-card">{form}</Card> : <Modal title={!canEdit ? "Exercise details" : exercise ? "Edit exercise" : "Add an exercise"} onClose={onClose} wide>{form}</Modal>);
 }
 
-function ExerciseDetailPage({ exercise, canEdit, onBack, onShare, onEdit, onSaveDiagram }: {
-  exercise?: Exercise; canEdit: boolean; onBack: () => void; onShare: () => void; onEdit: () => void;
+function ExerciseDetailPage({ exercise, canEdit, saving: savingDetails, startEditing, onBack, onShare, onSave, onSaveDiagram }: {
+  exercise?: Exercise; canEdit: boolean; saving: boolean; startEditing: boolean; onBack: () => void; onShare: () => void; onSave: (data: Omit<Exercise, "id" | "clubId" | "createdBy">) => Promise<boolean>;
   onSaveDiagram: (diagramJson: string) => Promise<void>;
 }) {
+  const [editing, setEditing] = useState(startEditing);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  useEffect(() => setEditing(startEditing), [startEditing]);
   return localize(<div className="content-page exercise-detail">
     <div className="page-intro exercise-detail-heading">
       <div><span className="section-kicker">SHARED EXERCISE · CLUB MEMBERS</span><h1 data-no-translate={Boolean(exercise)}>{exercise?.title || "Exercise unavailable"}</h1><p>{exercise ? `${exercise.category} · ${exercise.ageGroup} · ${exercise.complexity}` : "This exercise may have been removed, or you may not have access to its club."}</p></div>
-      <div className="training-detail-actions exercise-detail-controls"><Button variant="secondary" onClick={onBack}><ArrowLeft size={15} /> Exercise library</Button>{exercise && <>{canEdit && <Button variant="secondary" onClick={onEdit}><Pencil size={15} /> Edit details</Button>}<Button variant="secondary" onClick={onShare}><Copy size={15} /> Copy link</Button><Button onClick={() => window.print()}><Printer size={15} /> Export PDF</Button></>}</div>
+      <div className="training-detail-actions exercise-detail-controls"><Button variant="secondary" onClick={onBack}><ArrowLeft size={15} /> Exercise library</Button>{exercise && <>{canEdit && <Button variant="secondary" onClick={() => setEditing((value) => !value)}><Pencil size={15} />{editing ? "Cancel edit" : "Edit details"}</Button>}{!editing && <><Button variant="secondary" onClick={onShare}><Copy size={15} /> Copy link</Button><Button onClick={() => window.print()}><Printer size={15} /> Export PDF</Button></>}</>}</div>
     </div>
     {exercise && <div className="exercise-print-content">
-      <Card className="exercise-detail-card">
+      {editing && canEdit ? <ExerciseForm inline exercise={exercise} canEdit={canEdit} saving={savingDetails} onClose={() => setEditing(false)} onSave={async (value) => {
+        if (await onSave(value)) setEditing(false);
+      }} /> : <Card className="exercise-detail-card">
         <div className="exercise-detail-meta"><Badge>{exercise.ageGroup}</Badge><Badge tone="green">{exercise.complexity}</Badge><span>{exercise.category}</span></div>
         <h2 data-no-translate>{exercise.title}</h2>
         <p className="exercise-detail-description" data-no-translate>{exercise.description || "A club drill, ready to take to the court."}</p>
         {exercise.tags.length > 0 && <div className="exercise-tags">{exercise.tags.map((tag) => <span key={tag} data-no-translate>#{tag}</span>)}</div>}
-      </Card>
+      </Card>}
       <Card className="diagram-card exercise-diagram-card">
         <div className="diagram-titlebar"><div><div className="diagram-eyebrow"><span className="green-pip" /> COURT SKETCH <span>·</span> SAVES WITH EXERCISE</div><h2>Exercise diagram</h2></div></div>
         {!canEdit && <p className="read-only-note">You have view-only access to diagrams.</p>}
