@@ -26,7 +26,7 @@ const initialItems: DiagramItem[] = [
   { id: "a1", type: "pass", x: 160, y: 125, width: 110, height: 88 },
 ];
 
-export default function DiagramEditor({ value, onSave }: { value: string; onSave: (value: string) => Promise<void> }) {
+export default function DiagramEditor({ value, onSave, readOnly = false }: { value: string; onSave?: (value: string) => Promise<void>; readOnly?: boolean }) {
   const [items, setItems] = useState<DiagramItem[]>(() => {
     try { return value ? JSON.parse(value) as DiagramItem[] : initialItems; } catch { return initialItems; }
   });
@@ -44,14 +44,14 @@ export default function DiagramEditor({ value, onSave }: { value: string; onSave
   }, [selectedId, items]);
   useEffect(() => {
     const keyDown = (event: KeyboardEvent) => {
-      if ((event.key === "Delete" || event.key === "Backspace") && selectedId && !["INPUT", "TEXTAREA"].includes((event.target as HTMLElement).tagName)) {
+      if (!readOnly && (event.key === "Delete" || event.key === "Backspace") && selectedId && !["INPUT", "TEXTAREA"].includes((event.target as HTMLElement).tagName)) {
         setItems((current) => current.filter((item) => item.id !== selectedId));
         setSelectedId(null);
       }
     };
     window.addEventListener("keydown", keyDown);
     return () => window.removeEventListener("keydown", keyDown);
-  }, [selectedId]);
+  }, [selectedId, readOnly]);
   const add = (type: DiagramItem["type"]) => {
     const id = crypto.randomUUID();
     setItems((current) => [...current, { id, type, x: 180 + Math.random() * 140, y: 90 + Math.random() * 130, width: type === "arrow" || type === "pass" || type === "movement" ? 120 : type === "text" ? 100 : 40, height: type === "arrow" || type === "pass" || type === "movement" ? 70 : 40, text: type === "text" ? "Text" : undefined }]);
@@ -60,6 +60,7 @@ export default function DiagramEditor({ value, onSave }: { value: string; onSave
   const updateItem = (id: string, change: Partial<DiagramItem>) =>
     setItems((current) => current.map((item) => item.id === id ? { ...item, ...change } : item));
   const save = async () => {
+    if (!onSave) throw new Error("Saving is unavailable for this diagram.");
     await onSave(JSON.stringify(items));
     setSaved(true);
     window.setTimeout(() => setSaved(false), 1800);
@@ -67,7 +68,7 @@ export default function DiagramEditor({ value, onSave }: { value: string; onSave
 
   return localize((
     <div className="diagram-editor">
-      <div className="diagram-toolbar">
+      {!readOnly && <div className="diagram-toolbar">
         <div className="tool-list">{tools.map(({ type, label, icon: Icon }) =>
           <button className="tool-button" key={type} onClick={() => add(type)} title={`Add ${label}`}><Icon size={16} /><span>{label}</span></button>
         )}</div>
@@ -75,15 +76,15 @@ export default function DiagramEditor({ value, onSave }: { value: string; onSave
           <Button variant="ghost" onClick={() => { setItems([]); setSelectedId(null); }}><RotateCcw size={15} /> Clear</Button>
           {selectedId && <Button variant="ghost" onClick={() => updateItem(selectedId, { rotation: ((selectedItem?.rotation || 0) + 15) % 360 })}><RotateCw size={15} /> Rotate 15°</Button>}
           {selectedId && <Button variant="ghost" onClick={() => { setItems((current) => current.filter((item) => item.id !== selectedId)); setSelectedId(null); }}><Trash2 size={15} /> Delete</Button>}
-          <Button onClick={() => void save()}><Save size={15} /> {saved ? "Saved!" : "Save diagram"}</Button>
+          {onSave && <Button onClick={() => void save()}><Save size={15} /> {saved ? "Saved!" : "Save diagram"}</Button>}
         </div>
-      </div>
+      </div>}
       <div className="canvas-wrap">
         <Stage
           ref={stageRef}
           width={620}
           height={360}
-          onMouseDown={(event) => { if (event.target === event.target.getStage()) setSelectedId(null); }}
+          onMouseDown={readOnly ? undefined : (event) => { if (event.target === event.target.getStage()) setSelectedId(null); }}
           className="court-canvas"
         >
           <Layer listening={false}>
@@ -124,11 +125,11 @@ export default function DiagramEditor({ value, onSave }: { value: string; onSave
           <Layer>
             {items.map((item) => {
               const common = {
-                key: item.id, x: item.x, y: item.y, draggable: true,
+                key: item.id, x: item.x, y: item.y, draggable: !readOnly,
                 rotation: item.rotation || 0,
-                onClick: () => setSelectedId(item.id), onTap: () => setSelectedId(item.id),
-                onDragEnd: (event: Konva.KonvaEventObject<DragEvent>) => updateItem(item.id, { x: event.target.x(), y: event.target.y() }),
-                onTransformEnd: (event: Konva.KonvaEventObject<Event>) => {
+                onClick: readOnly ? undefined : () => setSelectedId(item.id), onTap: readOnly ? undefined : () => setSelectedId(item.id),
+                onDragEnd: readOnly ? undefined : (event: Konva.KonvaEventObject<DragEvent>) => updateItem(item.id, { x: event.target.x(), y: event.target.y() }),
+                onTransformEnd: readOnly ? undefined : (event: Konva.KonvaEventObject<Event>) => {
                   const node = event.target;
                   updateItem(item.id, { x: node.x(), y: node.y(), width: Math.max(20, item.width * node.scaleX()), height: Math.max(20, item.height * node.scaleY()), rotation: node.rotation() });
                   node.scaleX(1); node.scaleY(1);
@@ -149,11 +150,11 @@ export default function DiagramEditor({ value, onSave }: { value: string; onSave
               if (item.type === "ball") return <Ellipse {...common} radiusX={item.width / 2} radiusY={item.height / 2} fill={colors.ball} stroke="#fff" strokeWidth={2} />;
               return <Text {...common} text={item.text || "Text"} width={item.width} height={item.height} wrap="word" fontSize={16} fontStyle="bold" fill={colors.text} />;
             })}
-            <Transformer ref={transformerRef} rotateEnabled enabledAnchors={["top-left", "top-right", "bottom-left", "bottom-right"]} boundBoxFunc={(oldBox, newBox) => newBox.width < 20 || newBox.height < 20 ? oldBox : newBox} />
+            {!readOnly && <Transformer ref={transformerRef} rotateEnabled enabledAnchors={["top-left", "top-right", "bottom-left", "bottom-right"]} boundBoxFunc={(oldBox, newBox) => newBox.width < 20 || newBox.height < 20 ? oldBox : newBox} />}
           </Layer>
         </Stage>
       </div>
-      <div className="canvas-caption"><span><Plus size={13} /> Court markings and goals stay fixed</span><span>Drag to move · Select to resize or rotate · Delete key to remove</span></div>
+      {!readOnly && <div className="canvas-caption"><span><Plus size={13} /> Court markings and goals stay fixed</span><span>Drag to move · Select to resize or rotate · Delete key to remove</span></div>}
     </div>
   ));
 }

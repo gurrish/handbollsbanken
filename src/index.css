@@ -196,10 +196,15 @@ select.field { padding-right: 25px; cursor: pointer; }
 .training-exercises .section-heading { margin-bottom: 2px; }
 .training-exercises .section-heading h2 { font-size: 15px; }
 .training-exercise { display: flex; align-items: flex-start; gap: 12px; padding: 14px; }
-.training-exercise > div { flex: 1; min-width: 0; }
-.training-exercise > div > strong { color: #3b465c; font-size: 11px; }
+.training-exercise-copy { flex: 1; min-width: 0; }
+.training-exercise-copy > strong { color: #3b465c; font-size: 11px; }
 .training-exercise p { margin: 5px 0 0; color: #8992a5; font-size: 10px; line-height: 1.55; }
 .training-exercise > .badge { margin-left: auto; }
+.training-exercise-diagram { max-width: 100%; margin-top: 12px; }
+.training-exercise-diagram .diagram-editor { margin-top: 0; }
+.training-exercise-diagram .canvas-wrap { overflow: hidden; justify-content: flex-start; padding: 8px; border: 1px solid #e9edf3; border-radius: 8px; }
+.training-exercise-diagram .court-canvas { width: min(100%,620px) !important; height: auto !important; }
+.training-print-content { display: flex; flex-direction: column; gap: 14px; }
 .training-sharing-note { margin: 0; color: #9ba3b2; font-size: 9px; }
 .exercise-detail-heading { align-items: flex-start; }
 .exercise-detail-controls { flex-wrap: wrap; justify-content: flex-end; }
@@ -244,15 +249,31 @@ select.field { padding-right: 25px; cursor: pointer; }
 @media print {
   @page { size: A4; margin: 14mm; }
   body * { visibility: hidden !important; }
-  .exercise-detail, .exercise-detail * { visibility: visible !important; }
+  .exercise-detail, .exercise-detail *, .training-detail, .training-detail * { visibility: visible !important; }
   .exercise-detail { position: absolute; inset: 0 auto auto 0; width: 100%; gap: 12px; color: #202a40; }
-  .exercise-detail-controls, .exercise-detail .diagram-toolbar, .exercise-detail .canvas-caption,
+  .training-detail { position: absolute; inset: 0 auto auto 0; width: 100%; gap: 5mm; color: #202a40; }
+  .exercise-detail-controls, .training-detail-controls, .exercise-detail .diagram-toolbar, .training-detail .diagram-toolbar,
+  .exercise-detail .canvas-caption, .training-detail .canvas-caption,
   .exercise-detail .diagram-legend, .exercise-detail .saving-indicator, .exercise-detail .error-banner,
-  .toast { display: none !important; }
+  .training-detail .diagram-legend, .training-detail .saving-indicator, .training-detail .error-banner,
+  .training-detail .training-sharing-note, .toast { display: none !important; }
   .exercise-detail-heading { margin: 0 0 4mm; }
   .exercise-detail-heading h1 { margin: 2mm 0; color: #202a40; font-size: 22pt; }
   .exercise-detail-heading .section-kicker { color: #606b7e; }
+  .training-detail > .page-intro { margin: 0 0 2mm; }
+  .training-detail > .page-intro h1 { margin: 2mm 0; color: #202a40; font-size: 22pt; }
+  .training-detail > .page-intro .section-kicker { color: #606b7e; }
   .exercise-print-content { gap: 5mm; }
+  .training-print-content { gap: 4mm; }
+  .training-detail-card, .training-exercise { break-inside: avoid; border: 1px solid #d7dce5; border-radius: 0; box-shadow: none; }
+  .training-detail-card { gap: 3mm; padding: 4mm; }
+  .training-exercise { padding: 4mm; }
+  .training-exercise-copy > strong { color: #202a40; font-size: 11pt; }
+  .training-exercise p { color: #303b52; font-size: 9pt; }
+  .training-exercises { gap: 3mm; }
+  .training-exercises > .section-heading h2 { color: #202a40; }
+  .training-exercise-diagram { break-inside: avoid; margin-top: 3mm; }
+  .training-exercise-diagram .canvas-wrap { overflow: visible; padding: 2mm; }
   .exercise-detail-card, .exercise-diagram-card { break-inside: avoid; border: 1px solid #d7dce5; border-radius: 0; box-shadow: none; }
   .exercise-detail-card { gap: 3mm; padding: 5mm; }
   .exercise-detail-card h2 { color: #202a40; font-size: 15pt; }
@@ -262,5 +283,6 @@ select.field { padding-right: 25px; cursor: pointer; }
   .exercise-detail .diagram-titlebar h2 { color: #202a40; font-size: 12pt; }
   .exercise-detail .canvas-wrap { overflow: visible; padding: 3mm 0 0; border: 0; background: #fff; }
   .exercise-detail .court-canvas { max-width: 100%; border: 1px solid #e2e6ed; border-radius: 0; box-shadow: none; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  .training-detail .court-canvas { max-width: 100%; border: 1px solid #e2e6ed; border-radius: 0; box-shadow: none; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
   .exercise-detail .badge { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
 }

@@ -266,7 +266,7 @@ export default function App() {
           )}
         </nav>
         <div className="sidebar-bottom">
-          <div className="sidebar-help"><div className="help-icon"><CircleHelp size={18} /></div><div><strong>Need a hand?</strong><span>We’re here to help</span></div><ArrowUpRight size={15} /></div>
+          <a className="sidebar-help" href="https://github.com/gurrish/handbollsbanken/issues/new" target="_blank" rel="noopener noreferrer"><div className="help-icon"><CircleHelp size={18} /></div><div><strong>Experience issues?</strong><span>Report a bug</span></div><ArrowUpRight size={15} /></a>
           <div className="user-profile">
             <div className="user-avatar">{data.user.name.slice(0, 1).toUpperCase()}</div>
             <div className="profile-copy"><strong data-no-translate>{data.user.name}</strong><span>{data.user.roles.map((role) => roleLabel[role]).join(", ")}</span><ProfileEditor name={data.user.name} email={data.user.email} saving={saving} onSave={(name) => act(() => api("users/me/profile", { method: "PATCH", body: JSON.stringify({ name }) }), "Display name updated.")} /></div>
@@ -513,24 +513,24 @@ function TrainingDetailPage({ plan, data, exerciseById, canEdit, saving, startEd
   return localize(<div className="content-page training-detail">
     <div className="page-intro">
       <div><span className="section-kicker">SHARED TRAINING · CLUB MEMBERS</span><h1>{plan?.title || "Training unavailable"}</h1><p>{plan ? `${dateLabel(plan.date, undefined, locale)} · ${team?.name || "Team"} · ${plan.duration} min` : "This training may have been removed, or you may not have access to its club."}</p></div>
-      <div className="training-detail-actions"><Button variant="secondary" onClick={onBack}><ArrowLeft size={15} /> Training planner</Button>{plan && <>{canEdit && <Button variant="secondary" onClick={() => setEditing((value) => !value)}><Pencil size={15} />{editing ? "Cancel edit" : "Edit training"}</Button>}<Button onClick={onShare}><Copy size={15} /> Copy link</Button></>}</div>
+      <div className="training-detail-actions training-detail-controls"><Button variant="secondary" onClick={onBack}><ArrowLeft size={15} /> Training planner</Button>{plan && <>{canEdit && <Button variant="secondary" onClick={() => setEditing((value) => !value)}><Pencil size={15} />{editing ? "Cancel edit" : "Edit training"}</Button>}<Button variant="secondary" onClick={onShare}><Copy size={15} /> Copy link</Button><Button onClick={() => window.print()}><Printer size={15} /> Export PDF</Button></>}</div>
     </div>
     {plan && (editing && canEdit
       ? <PlanForm inline plan={plan} teams={data.teams} exercises={data.exercises} saving={saving} onClose={() => setEditing(false)} onSave={async (value) => {
         if ("teamId" in value && "date" in value && await onSave(value)) setEditing(false);
       }} />
-      : <>
+      : <div className="training-print-content">
         <Card className="training-detail-card">
-          <div className="training-detail-meta"><Badge>{team?.ageGroup || "Team"}</Badge><span data-no-translate={Boolean(team)}>{team?.name || "Team"}</span><span><Clock3 size={14} />{plan.duration} min</span></div>
+          <div className="training-detail-meta"><Badge>{team?.ageGroup || "Team"}</Badge><span data-no-translate={Boolean(team)}>{team?.name || "Team"}</span><span><CalendarDays size={14} />{dateLabel(plan.date, undefined, locale)}</span><span><Clock3 size={14} />{plan.duration} min</span></div>
           <PlanTimeline plan={plan} exerciseById={exerciseById} />
           {plan.notes && <div className="training-coach-notes"><span className="section-kicker">COACH’S NOTES</span><p data-no-translate>{plan.notes}</p></div>}
         </Card>
         <div className="training-exercises">
           <div className="section-heading"><div><span className="section-kicker">SESSION FLOW</span><h2>{exercises.length} exercises</h2></div></div>
-          {exercises.length ? exercises.map(({ id, exercise, custom }, index) => <Card className="training-exercise" key={id}><span className="order-index">{String(index + 1).padStart(2, "0")}</span><div><strong data-no-translate>{exercise?.title || custom?.title || "Exercise"}</strong><p data-no-translate>{exercise?.description || (custom ? "Free-text exercise." : "No exercise notes.")}</p>{exercise && <div className="exercise-tags">{exercise.tags.map((tag) => <span key={tag} data-no-translate>#{tag}</span>)}</div>}</div><Badge>{exerciseMinutes(plan, id, index)} min</Badge></Card>) : <Card className="training-exercise"><p>This session has no exercises yet.</p></Card>}
+          {exercises.length ? exercises.map(({ id, exercise, custom }, index) => <Card className="training-exercise" key={id}><span className="order-index">{String(index + 1).padStart(2, "0")}</span><div className="training-exercise-copy"><strong data-no-translate>{exercise?.title || custom?.title || "Exercise"}</strong><p data-no-translate>{exercise?.description || (custom ? "Free-text exercise." : "No exercise notes.")}</p>{exercise && <div className="exercise-tags">{exercise.tags.map((tag) => <span key={tag} data-no-translate>#{tag}</span>)}</div>}{hasDiagram(exercise) && <div className="training-exercise-diagram"><DiagramEditor key={`${id}-diagram`} value={exercise.diagramJson} readOnly /></div>}</div><Badge>{exerciseMinutes(plan, id, index)} min</Badge></Card>) : <Card className="training-exercise"><p>This session has no exercises yet.</p></Card>}
         </div>
         <p className="training-sharing-note">This link is for signed-in members with access to this club. It won’t make the training public.</p>
-      </>)}
+      </div>)}
   </div>);
 }
 
@@ -583,6 +583,15 @@ function exerciseMinutes(plan: Pick<TrainingPlan, "duration" | "exerciseIds" | "
   const count = plan.exerciseIds.length;
   if (!count) return 0;
   return Math.floor(plan.duration / count) + (index < plan.duration % count ? 1 : 0);
+}
+function hasDiagram(exercise: Exercise | undefined): exercise is Exercise {
+  if (!exercise) return false;
+  try {
+    const diagram: unknown = JSON.parse(exercise.diagramJson);
+    return Array.isArray(diagram) && diagram.length > 0;
+  } catch {
+    return false;
+  }
 }
 type PlanFormValue = Omit<TrainingPlan, "id" | "clubId"> | Omit<TrainingTemplate, "id" | "clubId">;
 function PlanForm({ mode = "plan", plan, template, teams = [], exercises, saving, inline = false, onClose, onSave }: { mode?: "plan" | "template"; plan?: TrainingPlan; template?: TrainingTemplate; teams?: Bootstrap["teams"]; exercises: Exercise[]; saving: boolean; inline?: boolean; onClose: () => void; onSave: (value: PlanFormValue) => Promise<void> }) {
