@@ -560,6 +560,7 @@ function Overview({ data, onNavigate, onOpenTraining, onPlanOccurrence, canEdit 
                 const plan = dayPlans.find((item) => item.scheduleId === schedule.id);
                 return <button type="button" className={`week-session ${plan ? "" : "week-session-unplanned"}`} key={schedule.id} aria-label={`${plan?.title || "Unplanned training"}, ${team?.name || "Team"}, ${schedule.startTime}`} onClick={() => plan ? onOpenTraining(plan.id) : canEdit ? onPlanOccurrence(schedule, key) : onNavigate("planner")}>
                   <strong data-no-translate>{plan?.title || "Plan this session"}</strong>
+                  {!plan && <span className="week-session-attention">Needs planning</span>}
                   <span data-no-translate={Boolean(team)}>{team?.name || "Team"}</span>
                   <small>{schedule.startTime} · {team?.ageGroup || "—"} · {schedule.duration} min</small>
                 </button>;

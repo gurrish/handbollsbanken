@@ -119,7 +119,7 @@ select.field { padding-right: 25px; cursor: pointer; }
 .weekly-schedule-section { display: flex; flex-direction: column; gap: 10px; }
 .scheduled-occurrences { display: flex; flex-direction: column; gap: 7px; }
 .scheduled-occurrence { display: grid; grid-template-columns: 100px minmax(0,1fr) auto; align-items: center; gap: 12px; padding: 11px 13px; }
-.occurrence-planned { background: #f7f8fd; border-color: #e2e7f4; }
+.occurrence-planned { background: #fff; }
 .occurrence-needs-planning { border-left: 3px solid #d9a064; background: #fffaf3; }
 .occurrence-attention { display: inline-flex; align-items: center; gap: 5px; width: fit-content; padding: 5px 8px; border: 1px solid #f1dfbd; border-radius: 6px; background: #fff5e4; color: #95631f; font-size: 9px; font-weight: 700; }
 .occurrence-attention::before { width: 6px; height: 6px; border-radius: 50%; background: #d99a3d; content: ""; }
@@ -141,8 +141,10 @@ select.field { padding-right: 25px; cursor: pointer; }
 .occurrence-actions .field { width: auto; max-width: 170px; min-height: 30px; padding: 0 22px 0 7px; font-size: 9px; }
 .schedule-management-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 2px; border-bottom: 1px solid #edf0f5; color: #8b95a7; font-size: 9px; }
 .schedule-management-row > span:last-child { display: flex; gap: 12px; }
-.week-session-unplanned { border-left-color: #d9a064; background: #fff7ee; }
-.week-session-unplanned:hover { background: #fff0df; }
+.week-session-unplanned { border-left: 3px solid #d9a064; background: #fffaf3; }
+.week-session-unplanned:hover { background: #fff5e8; }
+.week-session .week-session-attention { display: inline-flex; align-items: center; gap: 4px; width: fit-content; padding: 3px 5px; border: 1px solid #f1dfbd; border-radius: 5px; background: #fff5e4; color: #95631f; font-size: 7px; font-weight: 700; }
+.week-session .week-session-attention::before { width: 5px; height: 5px; flex: 0 0 5px; border-radius: 50%; background: #d99a3d; content: ""; }
 @media (max-width: 760px) {
   .scheduled-occurrence { grid-template-columns: 1fr; gap: 9px; }
   .occurrence-main { align-items: flex-start; flex-direction: column; gap: 8px; }
